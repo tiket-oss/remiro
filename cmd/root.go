@@ -1,3 +1,4 @@
+// Package cmd provides CLI support for remiro.
 package cmd
 
 import (
@@ -20,7 +21,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// Execute runs root command
+// Execute is a wrapper that will initialize root command.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)

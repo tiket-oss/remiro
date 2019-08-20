@@ -1,5 +1,4 @@
-// Package server provides implementation for creating a TCP server which will
-// listen to a specific port.
+// Package server provides implementation for creating a TCP server.
 package server
 
 import (
@@ -12,13 +11,14 @@ const (
 	connType = "tcp"
 )
 
-// Config holds configuration for instantiating a net.Listener
+// Config holds configuration for instantiating a net.Listener.
 type Config struct {
 	Host string
 	Port string
 }
 
-// Run creates a new Listener with specified host and port on TCP network
+// Run creates a new Listener with specified host and port on TCP network.
+// It will also need a handler function to serve incoming connection.
 func Run(cfg Config, handler func(c net.Conn)) {
 	l, err := net.Listen(connType, fmt.Sprintf("%s:%s", cfg.Host, cfg.Port))
 	if err != nil {
