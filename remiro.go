@@ -8,11 +8,8 @@ package remiro
 import (
 	"fmt"
 	"log"
-	"net"
-)
 
-const (
-	connType = "tcp"
+	"github.com/tidwall/redcon"
 )
 
 // Config holds configuration for instantiating a net.Listener.
@@ -22,20 +19,18 @@ type Config struct {
 }
 
 // Run creates a new Listener with specified host and port on TCP network.
-// It will also need a handler function to serve incoming connection.
-func Run(cfg Config, handler func(c net.Conn)) {
-	l, err := net.Listen(connType, fmt.Sprintf("%s:%s", cfg.Host, cfg.Port))
+func Run(cfg Config, handler Handler) {
+	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
+	err := redcon.ListenAndServe(addr, handler.Handle, handler.Accept, handler.Closed)
+
 	if err != nil {
-		log.Fatal(fmt.Errorf("Error listening: %v", err))
+		log.Fatal(err)
 	}
-	defer l.Close()
+}
 
-	for {
-		c, err := l.Accept()
-		if err != nil {
-			log.Print(fmt.Errorf("Error accepting connection: %v", err))
-		}
-
-		go handler(c)
-	}
+// Handler provide set of methods to handle incoming connection
+type Handler interface {
+	Handle(conn redcon.Conn, cmd redcon.Command)
+	Accept(conn redcon.Conn) bool
+	Closed(conn redcon.Conn, err error)
 }
