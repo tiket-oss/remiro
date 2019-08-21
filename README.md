@@ -39,5 +39,5 @@ With the assumption in place, we can establish a mechanism in which Remiro will 
 - If assignment request came through remiro:
   - Remiro will write the data to **destination**
   - (optional) Remiro will delete the data with the same key from **source**
-- If any other request came throug remiro:
+- If any other request came through remiro:
   - Simply proxy the request to the **destination**
