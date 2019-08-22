@@ -10,6 +10,7 @@ import (
 	"github.com/tidwall/redcon"
 )
 
+// redisHandler is an implementation of Handler
 type redisHandler struct {
 	sourcePool      *redis.Pool
 	destinationPool *redis.Pool
@@ -31,6 +32,8 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		key := cmd.Args[1]
 
 		dstConn := r.destinationPool.Get()
+		defer dstConn.Close()
+
 		reply, err := redis.String(dstConn.Do(command, args...))
 		if err == nil {
 			conn.WriteBulkString(reply)
@@ -43,6 +46,8 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		}
 
 		srcConn := r.sourcePool.Get()
+		defer srcConn.Close()
+
 		reply, err = redis.String(srcConn.Do(command, args...))
 		if err == nil {
 			val := reply
@@ -68,13 +73,18 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		key := cmd.Args[1]
 
 		dstConn := r.destinationPool.Get()
+		defer dstConn.Close()
+
 		reply, err := redis.String(dstConn.Do(command, args...))
 		if err != nil {
 			log.Error(fmt.Errorf("Error when setting key %s: %v", key, err))
 		}
 
 		if r.deleteOnSet && err == nil {
-			if err := deleteKey(dstConn, key); err != nil {
+			srcConn := r.sourcePool.Get()
+			defer srcConn.Close()
+
+			if err := deleteKey(srcConn, key); err != nil {
 				log.Error(err)
 			}
 		}
@@ -91,12 +101,14 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		}
 
 		dstConn := r.destinationPool.Get()
-		reply, err := redis.Bytes(dstConn.Do(command, args...))
+		defer dstConn.Close()
+
+		reply, err := dstConn.Do(command, args...)
 		if err != nil {
-			log.Error(fmt.Errorf("Error when executin command %s: %v", command, err))
+			log.Error(fmt.Errorf("Error when executing command %s: %v", command, err))
 		}
 
-		conn.WriteRaw(reply)
+		writeResponse(conn, reply)
 	}
 }
 
@@ -136,4 +148,29 @@ func deleteKey(conn redis.Conn, key []byte) error {
 	}
 
 	return nil
+}
+
+func writeResponse(conn redcon.Conn, reply interface{}) {
+	switch resp := reply.(type) {
+	case nil:
+		conn.WriteNull()
+	case error:
+		conn.WriteError(resp.Error())
+	case string:
+		conn.WriteString(resp)
+	case []byte:
+		conn.WriteRaw(resp)
+	case int:
+		conn.WriteInt(resp)
+	case int64:
+		conn.WriteInt64(resp)
+	case []interface{}:
+		conn.WriteArray(len(resp))
+		for _, res := range resp {
+			writeResponse(conn, res)
+		}
+	default:
+		msg := fmt.Sprintf("Unrecognized reply: %v", resp)
+		conn.WriteError(msg)
+	}
 }
