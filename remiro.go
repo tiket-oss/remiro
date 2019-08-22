@@ -6,23 +6,14 @@
 package remiro
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/tidwall/redcon"
 )
 
-// Config holds configuration for instantiating a net.Listener.
-type Config struct {
-	Host string
-	Port string
-}
-
-// Run creates a new Listener with specified host and port on TCP network.
-func Run(cfg Config, handler Handler) {
-	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
+// Run creates a new Listener with specified address on TCP network.
+func Run(addr string, handler Handler) {
 	err := redcon.ListenAndServe(addr, handler.Handle, handler.Accept, handler.Closed)
-
 	if err != nil {
 		log.Fatal(err)
 	}
