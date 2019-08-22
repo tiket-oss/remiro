@@ -18,6 +18,8 @@ type redisHandler struct {
 	deleteOnSet     bool
 }
 
+var replyTypeBytes = []byte{'+', '-', ':', '$', '*'}
+
 func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 	command := strings.ToUpper(string(cmd.Args[0]))
 	switch command {
@@ -159,7 +161,11 @@ func writeResponse(conn redcon.Conn, reply interface{}) {
 	case string:
 		conn.WriteString(resp)
 	case []byte:
-		conn.WriteRaw(resp)
+		if isRawReply(resp) {
+			conn.WriteRaw(resp)
+		} else {
+			conn.WriteBulk(resp)
+		}
 	case int:
 		conn.WriteInt(resp)
 	case int64:
@@ -173,4 +179,14 @@ func writeResponse(conn redcon.Conn, reply interface{}) {
 		msg := fmt.Sprintf("Unrecognized reply: %v", resp)
 		conn.WriteError(msg)
 	}
+}
+
+func isRawReply(reply []byte) bool {
+	for _, replyType := range replyTypeBytes {
+		if reply[0] == replyType {
+			return true
+		}
+	}
+
+	return false
 }
