@@ -107,7 +107,9 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 
 		reply, err := dstConn.Do(command, args...)
 		if err != nil {
-			log.Error(fmt.Errorf("Error when executing command %s: %v", command, err))
+			if _, ok := err.(redis.Error); !ok {
+				log.Error(fmt.Errorf("Error when executing command %s: %v", command, err))
+			}
 		}
 
 		writeResponse(conn, reply)
