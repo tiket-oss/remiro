@@ -31,7 +31,6 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		for i, v := range cmd.Args[1:] {
 			args[i] = v
 		}
-		key := cmd.Args[1]
 
 		dstConn := r.destinationPool.Get()
 		defer dstConn.Close()
@@ -53,6 +52,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		reply, err = redis.String(srcConn.Do(command, args...))
 		if err == nil {
 			val := reply
+			key := cmd.Args[1]
 
 			_, err = redis.String(dstConn.Do("SET", key, val))
 			if err != nil {
@@ -72,17 +72,19 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		for i, v := range cmd.Args[1:] {
 			args[i] = v
 		}
-		key := cmd.Args[1]
 
 		dstConn := r.destinationPool.Get()
 		defer dstConn.Close()
 
 		reply, err := redis.String(dstConn.Do(command, args...))
 		if err != nil {
-			log.Error(fmt.Errorf("Error when setting key %s: %v", key, err))
+			conn.WriteError(err.Error())
+			break
 		}
 
 		if r.deleteOnSet && err == nil {
+			key := cmd.Args[1]
+
 			srcConn := r.sourcePool.Get()
 			defer srcConn.Close()
 
