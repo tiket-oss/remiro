@@ -126,23 +126,38 @@ func (r *redisHandler) Closed(conn redcon.Conn, err error) {
 
 }
 
+// ClientConfig holds the configuration for Redis client
+type ClientConfig struct {
+	Addr         string
+	MaxIdleConns int
+	IdleTimeout  time.Duration
+}
+
+// RedisConfig holds configuration for initializing redisHandler
+type RedisConfig struct {
+	DeleteOnGet bool
+	DeleteOnSet bool
+	Source      ClientConfig
+	Destination ClientConfig
+}
+
 // NewRedisHandler returns new instance of redisHandler, a connection
 // handler that handler redis-like interface
-func NewRedisHandler(srcURL, dstURL string) Handler {
+func NewRedisHandler(config RedisConfig) Handler {
 	return &redisHandler{
-		sourcePool:      newRedisPool(srcURL),
-		destinationPool: newRedisPool(dstURL),
-		deleteOnGet:     true,
-		deleteOnSet:     true,
+		sourcePool:      newRedisPool(config.Source),
+		destinationPool: newRedisPool(config.Destination),
+		deleteOnGet:     config.DeleteOnGet,
+		deleteOnSet:     config.DeleteOnSet,
 	}
 }
 
-func newRedisPool(addr string) *redis.Pool {
+func newRedisPool(config ClientConfig) *redis.Pool {
 	return &redis.Pool{
-		MaxIdle:     100,
-		IdleTimeout: 30 * time.Second,
+		MaxIdle:     config.MaxIdleConns,
+		IdleTimeout: config.IdleTimeout,
 		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", addr)
+			return redis.Dial("tcp", config.Addr)
 		},
 	}
 }
