@@ -1,2 +1,5 @@
 # Ignore built binary on root folder
 remiro
+
+# Ignore local configuration file
+config.toml

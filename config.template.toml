@@ -1,0 +1,12 @@
+DeleteOnGet = true
+DeleteOnSet = false
+
+[Source]
+Addr = "redis-source:6379"
+MaxIdleConns = 50
+IdleTimeout = "30s"
+
+[Destination]
+Addr = "redis-destination:6379"
+MaxIdleConns = 100
+IdleTimeout = "45s"

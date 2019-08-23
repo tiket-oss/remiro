@@ -126,11 +126,21 @@ func (r *redisHandler) Closed(conn redcon.Conn, err error) {
 
 }
 
+type duration struct {
+	time.Duration
+}
+
+func (d *duration) UnmarshalText(text []byte) error {
+	var err error
+	d.Duration, err = time.ParseDuration(string(text))
+	return err
+}
+
 // ClientConfig holds the configuration for Redis client
 type ClientConfig struct {
 	Addr         string
 	MaxIdleConns int
-	IdleTimeout  time.Duration
+	IdleTimeout  duration
 }
 
 // RedisConfig holds configuration for initializing redisHandler
@@ -155,7 +165,7 @@ func NewRedisHandler(config RedisConfig) Handler {
 func newRedisPool(config ClientConfig) *redis.Pool {
 	return &redis.Pool{
 		MaxIdle:     config.MaxIdleConns,
-		IdleTimeout: config.IdleTimeout,
+		IdleTimeout: config.IdleTimeout.Duration,
 		Dial: func() (redis.Conn, error) {
 			return redis.Dial("tcp", config.Addr)
 		},
