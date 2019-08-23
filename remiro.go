@@ -6,17 +6,12 @@
 package remiro
 
 import (
-	"log"
-
 	"github.com/tidwall/redcon"
 )
 
 // Run creates a new Listener with specified address on TCP network.
-func Run(addr string, handler Handler) {
-	err := redcon.ListenAndServe(addr, handler.Handle, handler.Accept, handler.Closed)
-	if err != nil {
-		log.Fatal(err)
-	}
+func Run(addr string, handler Handler) error {
+	return redcon.ListenAndServe(addr, handler.Handle, handler.Accept, handler.Closed)
 }
 
 // Handler provide set of methods to handle incoming connection
