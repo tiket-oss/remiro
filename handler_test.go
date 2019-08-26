@@ -21,8 +21,10 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		dstGET := dstMock.Command("GET", []byte("mykey")).Expect("hello")
 
 		signal := make(chan error)
+		s := NewServer(":0", handler)
 		go func() {
-			s := NewServer(":1345", handler)
+			defer s.Close()
+
 			if err := s.ListenServeAndSignal(signal); err != nil {
 				t.Fatal(err)
 			}
@@ -39,7 +41,7 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			conn, err := net.Dial("tcp", ":1345")
+			conn, err := net.Dial("tcp", s.Addr().String())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -78,8 +80,10 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		srcGET := srcMock.Command("GET", []byte("mykey")).Expect("hello")
 
 		signal := make(chan error)
+		s := NewServer(":0", handler)
 		go func() {
-			s := NewServer(":1346", handler)
+			defer s.Close()
+
 			if err := s.ListenServeAndSignal(signal); err != nil {
 				t.Fatal(err)
 			}
@@ -96,7 +100,7 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			conn, err := net.Dial("tcp", ":1346")
+			conn, err := net.Dial("tcp", s.Addr().String())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -139,8 +143,10 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		srcDEL := srcMock.Command("DEL", []byte("mykey")).Expect(1)
 
 		signal := make(chan error)
+		s := NewServer(":0", handler)
 		go func() {
-			s := NewServer(":1347", handler)
+			defer s.Close()
+
 			if err := s.ListenServeAndSignal(signal); err != nil {
 				t.Fatal(err)
 			}
@@ -157,7 +163,7 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			conn, err := net.Dial("tcp", ":1347")
+			conn, err := net.Dial("tcp", s.Addr().String())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -195,8 +201,10 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		srcGET := srcMock.Command("GET", []byte("mykey")).Expect(nil)
 
 		signal := make(chan error)
+		s := NewServer(":0", handler)
 		go func() {
-			s := NewServer(":1348", handler)
+			defer s.Close()
+
 			if err := s.ListenServeAndSignal(signal); err != nil {
 				t.Fatal(err)
 			}
@@ -213,7 +221,7 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			conn, err := net.Dial("tcp", ":1348")
+			conn, err := net.Dial("tcp", s.Addr().String())
 			if err != nil {
 				t.Fatal(err)
 			}
