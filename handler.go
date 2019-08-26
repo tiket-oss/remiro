@@ -50,21 +50,29 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		defer srcConn.Close()
 
 		reply, err = redis.String(srcConn.Do(command, args...))
-		if err == nil {
-			val := reply
-			key := cmd.Args[1]
-
-			_, err = redis.String(dstConn.Do("SET", key, val))
-			if err != nil {
-				log.Error(fmt.Errorf("Error when setting key %s: %v", key, err))
+		if err != nil {
+			if err == redis.ErrNil {
+				conn.WriteNull()
+			} else {
+				conn.WriteError(err.Error())
 			}
+			break
+		}
 
-			if r.deleteOnGet && err == nil {
-				if err := deleteKey(srcConn, key); err != nil {
-					log.Error(err)
-				}
+		val := reply
+		key := cmd.Args[1]
+
+		_, err = redis.String(dstConn.Do("SET", key, val))
+		if err != nil {
+			log.Error(fmt.Errorf("Error when setting key %s: %v", key, err))
+		}
+
+		if r.deleteOnGet && err == nil {
+			if err := deleteKey(srcConn, key); err != nil {
+				log.Error(err)
 			}
 		}
+
 		conn.WriteBulkString(reply)
 
 	case "SET":
