@@ -41,24 +41,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			conn, err := net.Dial("tcp", s.Addr().String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer conn.Close()
-
-			_, err = io.WriteString(conn, "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
+			reply, err := doRequest(s.Addr().String(), "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			buf := make([]byte, 1024)
-			n, err := conn.Read(buf)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			assert.Equal(t, "$5\r\nhello\r\n", string(buf[:n]), "response should be equal to value")
+			assert.Equal(t, "$5\r\nhello\r\n", reply, "reply should be equal to value")
 			assert.True(t, dstGET.Called, "redis should be called")
 		}()
 
@@ -100,24 +88,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			conn, err := net.Dial("tcp", s.Addr().String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer conn.Close()
-
-			_, err = io.WriteString(conn, "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
+			reply, err := doRequest(s.Addr().String(), "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			buf := make([]byte, 1024)
-			n, err := conn.Read(buf)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			assert.Equal(t, "$5\r\nhello\r\n", string(buf[:n]), "response should be equal to value")
+			assert.Equal(t, "$5\r\nhello\r\n", reply, "reply should be equal to value")
 			assert.True(t, dstGET.Called, "destination redis GET command should be called")
 			assert.True(t, dstSET.Called, "destination redis SET command should be called")
 			assert.True(t, srcGET.Called, "source redis GET command should be called")
@@ -163,24 +139,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			conn, err := net.Dial("tcp", s.Addr().String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer conn.Close()
-
-			_, err = io.WriteString(conn, "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
+			reply, err := doRequest(s.Addr().String(), "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			buf := make([]byte, 1024)
-			n, err := conn.Read(buf)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			assert.Equal(t, "$5\r\nhello\r\n", string(buf[:n]), "response should be equal to value")
+			assert.Equal(t, "$5\r\nhello\r\n", reply, "reply should be equal to value")
 			assert.True(t, dstGET.Called, "destination redis GET command should be called")
 			assert.True(t, dstSET.Called, "destination redis SET command should be called")
 			assert.True(t, srcGET.Called, "source redis GET command should be called")
@@ -221,24 +185,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			conn, err := net.Dial("tcp", s.Addr().String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer conn.Close()
-
-			_, err = io.WriteString(conn, "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
+			reply, err := doRequest(s.Addr().String(), "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			buf := make([]byte, 1024)
-			n, err := conn.Read(buf)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			assert.Equal(t, "$-1\r\n", string(buf[:n]), "response should be equal to nil")
+			assert.Equal(t, "$-1\r\n", reply, "reply should be equal to nil")
 			assert.True(t, dstGET.Called, "destination redis GET command should be called")
 			assert.True(t, srcGET.Called, "source redis GET command should be called")
 		}()
@@ -296,5 +248,27 @@ func initHandlerMock() (handler *redisHandler, srcMock, dstMock *redigomock.Conn
 		},
 	}
 
+	return
+}
+
+func doRequest(addr, msg string) (reply string, err error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	_, err = io.WriteString(conn, msg)
+	if err != nil {
+		return
+	}
+
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return
+	}
+
+	reply = string(buf[:n])
 	return
 }
