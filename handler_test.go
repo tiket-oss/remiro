@@ -297,10 +297,51 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 func Test_redisHandler_HandleSET(t *testing.T) {
 
+	var (
+		key, value = "mykey", "hello"
+		rawMessage = fmt.Sprintf("*3\r\n$3\r\nSET\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(key), key, len(value), value)
+		rawOK      = "+OK\r\n"
+	)
+
 	t.Run(`[Given] deleteOnSet set to false
 			[When] a SET request for a key is received
 			[Then] SET the key with the value to "destination"`, func(t *testing.T) {
 
+		handler, _, dstMock := initHandlerMock()
+
+		dstSET := dstMock.Command("SET", []byte(key), []byte(value)).Expect("OK")
+
+		signal := make(chan error)
+		s := NewServer(":0", handler)
+		go func() {
+			defer s.Close()
+
+			if err := s.ListenServeAndSignal(signal); err != nil {
+				t.Fatal(err)
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			reply, err := doRequest(s.Addr().String(), rawMessage)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assert.Equal(t, rawOK, reply, "reply should be \"OK\"")
+			assert.True(t, dstSET.Called, "destination redis should be called")
+		}()
+
+		<-done
 	})
 
 	t.Run(`[Given] deleteOnSet set to true
