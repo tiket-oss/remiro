@@ -16,16 +16,9 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		    [When] a GET request for the key is received
 		    [Then] GET and return the key value from "destination"`, func(t *testing.T) {
 
-		mockConn := redigomock.NewConn()
-		handler := &redisHandler{
-			destinationPool: &redis.Pool{
-				Dial: func() (redis.Conn, error) {
-					return mockConn, nil
-				},
-			},
-		}
+		handler, _, dstMock := initHandlerMock()
 
-		mockCmd := mockConn.Command("GET", []byte("mykey")).Expect("hello")
+		dstGET := dstMock.Command("GET", []byte("mykey")).Expect("hello")
 
 		signal := make(chan error)
 		go func() {
@@ -63,7 +56,7 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 			}
 
 			assert.Equal(t, "$5\r\nhello\r\n", string(buf[:n]), "response should be equal to value")
-			assert.True(t, mockCmd.Called, "redis should be called")
+			assert.True(t, dstGET.Called, "redis should be called")
 		}()
 
 		<-done
@@ -76,25 +69,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		    [Then] GET and return the key value from "source"
 		     [And] SET the value with the key to "destination"`, func(t *testing.T) {
 
-		mockSrc := redigomock.NewConn()
-		mockDst := redigomock.NewConn()
-		handler := &redisHandler{
-			sourcePool: &redis.Pool{
-				Dial: func() (redis.Conn, error) {
-					return mockSrc, nil
-				},
-			},
-			destinationPool: &redis.Pool{
-				Dial: func() (redis.Conn, error) {
-					return mockDst, nil
-				},
-			},
-			deleteOnGet: false,
-		}
+		handler, srcMock, dstMock := initHandlerMock()
+		handler.deleteOnGet = false
 
-		mockDstGET := mockDst.Command("GET", []byte("mykey")).Expect(nil)
-		mockDstSET := mockDst.Command("SET", []byte("mykey"), "hello").Expect("OK")
-		mockSrcGET := mockSrc.Command("GET", []byte("mykey")).Expect("hello")
+		dstGET := dstMock.Command("GET", []byte("mykey")).Expect(nil)
+		dstSET := dstMock.Command("SET", []byte("mykey"), "hello").Expect("OK")
+		srcGET := srcMock.Command("GET", []byte("mykey")).Expect("hello")
 
 		signal := make(chan error)
 		go func() {
@@ -132,9 +112,9 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 			}
 
 			assert.Equal(t, "$5\r\nhello\r\n", string(buf[:n]), "response should be equal to value")
-			assert.True(t, mockDstGET.Called, "destination redis GET command should be called")
-			assert.True(t, mockDstSET.Called, "destination redis SET command should be called")
-			assert.True(t, mockSrcGET.Called, "source redis GET command should be called")
+			assert.True(t, dstGET.Called, "destination redis GET command should be called")
+			assert.True(t, dstSET.Called, "destination redis SET command should be called")
+			assert.True(t, srcGET.Called, "source redis GET command should be called")
 		}()
 
 		<-done
@@ -148,26 +128,13 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 			 [And] SET the value with the key to "destination"
 			 [And] DELETE the key from "source"`, func(t *testing.T) {
 
-		mockSrc := redigomock.NewConn()
-		mockDst := redigomock.NewConn()
-		handler := &redisHandler{
-			sourcePool: &redis.Pool{
-				Dial: func() (redis.Conn, error) {
-					return mockSrc, nil
-				},
-			},
-			destinationPool: &redis.Pool{
-				Dial: func() (redis.Conn, error) {
-					return mockDst, nil
-				},
-			},
-			deleteOnGet: true,
-		}
+		handler, srcMock, dstMock := initHandlerMock()
+		handler.deleteOnGet = true
 
-		mockDstGET := mockDst.Command("GET", []byte("mykey")).Expect(nil)
-		mockDstSET := mockDst.Command("SET", []byte("mykey"), "hello").Expect("OK")
-		mockSrcGET := mockSrc.Command("GET", []byte("mykey")).Expect("hello")
-		mockSrcDEL := mockSrc.Command("DEL", []byte("mykey")).Expect(1)
+		dstGET := dstMock.Command("GET", []byte("mykey")).Expect(nil)
+		dstSET := dstMock.Command("SET", []byte("mykey"), "hello").Expect("OK")
+		srcGET := srcMock.Command("GET", []byte("mykey")).Expect("hello")
+		srcDEL := srcMock.Command("DEL", []byte("mykey")).Expect(1)
 
 		signal := make(chan error)
 		go func() {
@@ -205,10 +172,10 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 			}
 
 			assert.Equal(t, "$5\r\nhello\r\n", string(buf[:n]), "response should be equal to value")
-			assert.True(t, mockDstGET.Called, "destination redis GET command should be called")
-			assert.True(t, mockDstSET.Called, "destination redis SET command should be called")
-			assert.True(t, mockSrcGET.Called, "source redis GET command should be called")
-			assert.True(t, mockSrcDEL.Called, "source redis DEL command should be called")
+			assert.True(t, dstGET.Called, "destination redis GET command should be called")
+			assert.True(t, dstSET.Called, "destination redis SET command should be called")
+			assert.True(t, srcGET.Called, "source redis GET command should be called")
+			assert.True(t, srcDEL.Called, "source redis DEL command should be called")
 		}()
 
 		<-done
@@ -219,23 +186,10 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		    [When] a GET request for the key is received
 		    [Then] return nil message from "source"`, func(t *testing.T) {
 
-		mockSrc := redigomock.NewConn()
-		mockDst := redigomock.NewConn()
-		handler := &redisHandler{
-			sourcePool: &redis.Pool{
-				Dial: func() (redis.Conn, error) {
-					return mockSrc, nil
-				},
-			},
-			destinationPool: &redis.Pool{
-				Dial: func() (redis.Conn, error) {
-					return mockDst, nil
-				},
-			},
-		}
+		handler, srcMock, dstMock := initHandlerMock()
 
-		mockDstGET := mockDst.Command("GET", []byte("mykey")).Expect(nil)
-		mockSrcGET := mockSrc.Command("GET", []byte("mykey")).Expect(nil)
+		dstGET := dstMock.Command("GET", []byte("mykey")).Expect(nil)
+		srcGET := srcMock.Command("GET", []byte("mykey")).Expect(nil)
 
 		signal := make(chan error)
 		go func() {
@@ -273,8 +227,8 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 			}
 
 			assert.Equal(t, "$-1\r\n", string(buf[:n]), "response should be equal to nil")
-			assert.True(t, mockDstGET.Called, "destination redis GET command should be called")
-			assert.True(t, mockSrcGET.Called, "source redis GET command should be called")
+			assert.True(t, dstGET.Called, "destination redis GET command should be called")
+			assert.True(t, srcGET.Called, "source redis GET command should be called")
 		}()
 
 		<-done
@@ -312,4 +266,23 @@ func Test_redisHandler_HandleDefault(t *testing.T) {
 		    [And] return the response`, func(t *testing.T) {
 
 	})
+}
+
+func initHandlerMock() (handler *redisHandler, srcMock, dstMock *redigomock.Conn) {
+	srcMock = redigomock.NewConn()
+	dstMock = redigomock.NewConn()
+	handler = &redisHandler{
+		sourcePool: &redis.Pool{
+			Dial: func() (redis.Conn, error) {
+				return srcMock, nil
+			},
+		},
+		destinationPool: &redis.Pool{
+			Dial: func() (redis.Conn, error) {
+				return dstMock, nil
+			},
+		},
+	}
+
+	return
 }
