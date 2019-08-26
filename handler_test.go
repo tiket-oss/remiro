@@ -25,8 +25,9 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 			},
 		}
 
-		signal := make(chan error)
 		mockCmd := mockConn.Command("GET", []byte("mykey")).Expect("hello")
+
+		signal := make(chan error)
 		go func() {
 			if err := RunWithSignal(":1345", handler, signal); err != nil {
 				t.Fatal(err)
@@ -75,6 +76,68 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		    [Then] GET and return the key value from "source"
 		     [And] SET the value with the key to "destination"`, func(t *testing.T) {
 
+		mockSrc := redigomock.NewConn()
+		mockDst := redigomock.NewConn()
+		handler := &redisHandler{
+			sourcePool: &redis.Pool{
+				Dial: func() (redis.Conn, error) {
+					return mockSrc, nil
+				},
+			},
+			destinationPool: &redis.Pool{
+				Dial: func() (redis.Conn, error) {
+					return mockDst, nil
+				},
+			},
+			deleteOnGet: false,
+		}
+
+		mockDstGET := mockDst.Command("GET", []byte("mykey")).Expect(nil)
+		mockDstSET := mockDst.Command("SET", []byte("mykey"), "hello").Expect("OK")
+		mockSrcGET := mockSrc.Command("GET", []byte("mykey")).Expect("hello")
+
+		signal := make(chan error)
+		go func() {
+			if err := RunWithSignal(":1346", handler, signal); err != nil {
+				t.Fatal(err)
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			conn, err := net.Dial("tcp", ":1346")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+
+			_, err = io.WriteString(conn, "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			buf := make([]byte, 1024)
+			n, err := conn.Read(buf)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assert.Equal(t, "$5\r\nhello\r\n", string(buf[:n]), "response should be equal to value")
+			assert.True(t, mockDstGET.Called, "destination redis GET command should be called")
+			assert.True(t, mockDstSET.Called, "destination redis SET command should be called")
+			assert.True(t, mockSrcGET.Called, "source redis GET command should be called")
+		}()
+
+		<-done
 	})
 
 	t.Run(`[Given] a key is not available in "destination"
