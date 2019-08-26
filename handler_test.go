@@ -1,6 +1,7 @@
 package remiro
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"testing"
@@ -12,13 +13,20 @@ import (
 
 func Test_redisHandler_HandleGET(t *testing.T) {
 
+	var (
+		key, value = "mykey", "hello"
+		rawMessage = fmt.Sprintf("*2\r\n$3\r\nGET\r\n$%d\r\n%s\r\n", len(key), key)
+		rawValue   = fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)
+		rawNil     = "$-1\r\n"
+	)
+
 	t.Run(`[Given] a key is available in "destination" 
 		    [When] a GET request for the key is received
 		    [Then] GET and return the key value from "destination"`, func(t *testing.T) {
 
 		handler, _, dstMock := initHandlerMock()
 
-		dstGET := dstMock.Command("GET", []byte("mykey")).Expect("hello")
+		dstGET := dstMock.Command("GET", []byte(key)).Expect(value)
 
 		signal := make(chan error)
 		s := NewServer(":0", handler)
@@ -41,12 +49,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			reply, err := doRequest(s.Addr().String(), "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
+			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			assert.Equal(t, "$5\r\nhello\r\n", reply, "reply should be equal to value")
+			assert.Equal(t, rawValue, reply, "reply should be equal to value")
 			assert.True(t, dstGET.Called, "redis should be called")
 		}()
 
@@ -63,9 +71,9 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		handler, srcMock, dstMock := initHandlerMock()
 		handler.deleteOnGet = false
 
-		dstGET := dstMock.Command("GET", []byte("mykey")).Expect(nil)
-		dstSET := dstMock.Command("SET", []byte("mykey"), "hello").Expect("OK")
-		srcGET := srcMock.Command("GET", []byte("mykey")).Expect("hello")
+		dstGET := dstMock.Command("GET", []byte(key)).Expect(nil)
+		dstSET := dstMock.Command("SET", []byte(key), value).Expect("OK")
+		srcGET := srcMock.Command("GET", []byte(key)).Expect(value)
 
 		signal := make(chan error)
 		s := NewServer(":0", handler)
@@ -88,12 +96,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			reply, err := doRequest(s.Addr().String(), "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
+			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			assert.Equal(t, "$5\r\nhello\r\n", reply, "reply should be equal to value")
+			assert.Equal(t, rawValue, reply, "reply should be equal to value")
 			assert.True(t, dstGET.Called, "destination redis GET command should be called")
 			assert.True(t, dstSET.Called, "destination redis SET command should be called")
 			assert.True(t, srcGET.Called, "source redis GET command should be called")
@@ -113,10 +121,10 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		handler, srcMock, dstMock := initHandlerMock()
 		handler.deleteOnGet = true
 
-		dstGET := dstMock.Command("GET", []byte("mykey")).Expect(nil)
-		dstSET := dstMock.Command("SET", []byte("mykey"), "hello").Expect("OK")
-		srcGET := srcMock.Command("GET", []byte("mykey")).Expect("hello")
-		srcDEL := srcMock.Command("DEL", []byte("mykey")).Expect(1)
+		dstGET := dstMock.Command("GET", []byte(key)).Expect(nil)
+		dstSET := dstMock.Command("SET", []byte(key), value).Expect("OK")
+		srcGET := srcMock.Command("GET", []byte(key)).Expect(value)
+		srcDEL := srcMock.Command("DEL", []byte(key)).Expect(1)
 
 		signal := make(chan error)
 		s := NewServer(":0", handler)
@@ -139,12 +147,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			reply, err := doRequest(s.Addr().String(), "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
+			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			assert.Equal(t, "$5\r\nhello\r\n", reply, "reply should be equal to value")
+			assert.Equal(t, rawValue, reply, "reply should be equal to value")
 			assert.True(t, dstGET.Called, "destination redis GET command should be called")
 			assert.True(t, dstSET.Called, "destination redis SET command should be called")
 			assert.True(t, srcGET.Called, "source redis GET command should be called")
@@ -157,12 +165,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 	t.Run(`[Given] a key is not available in "destination"
 			 [And] the key is not available in "source"
 		    [When] a GET request for the key is received
-		    [Then] return nil message from "source"`, func(t *testing.T) {
+		    [Then] return nil rawMessage from "source"`, func(t *testing.T) {
 
 		handler, srcMock, dstMock := initHandlerMock()
 
-		dstGET := dstMock.Command("GET", []byte("mykey")).Expect(nil)
-		srcGET := srcMock.Command("GET", []byte("mykey")).Expect(nil)
+		dstGET := dstMock.Command("GET", []byte(key)).Expect(nil)
+		srcGET := srcMock.Command("GET", []byte(key)).Expect(nil)
 
 		signal := make(chan error)
 		s := NewServer(":0", handler)
@@ -185,12 +193,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			reply, err := doRequest(s.Addr().String(), "*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")
+			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			assert.Equal(t, "$-1\r\n", reply, "reply should be equal to nil")
+			assert.Equal(t, rawNil, reply, "reply should be equal to nil")
 			assert.True(t, dstGET.Called, "destination redis GET command should be called")
 			assert.True(t, srcGET.Called, "source redis GET command should be called")
 		}()
