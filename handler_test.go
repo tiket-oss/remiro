@@ -22,7 +22,8 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 		signal := make(chan error)
 		go func() {
-			if err := RunWithSignal(":1345", handler, signal); err != nil {
+			s := NewServer(":1345", handler)
+			if err := s.ListenServeAndSignal(signal); err != nil {
 				t.Fatal(err)
 			}
 		}()
@@ -78,7 +79,8 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 		signal := make(chan error)
 		go func() {
-			if err := RunWithSignal(":1346", handler, signal); err != nil {
+			s := NewServer(":1346", handler)
+			if err := s.ListenServeAndSignal(signal); err != nil {
 				t.Fatal(err)
 			}
 		}()
@@ -138,7 +140,8 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 		signal := make(chan error)
 		go func() {
-			if err := RunWithSignal(":1347", handler, signal); err != nil {
+			s := NewServer(":1347", handler)
+			if err := s.ListenServeAndSignal(signal); err != nil {
 				t.Fatal(err)
 			}
 		}()
@@ -193,7 +196,8 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 		signal := make(chan error)
 		go func() {
-			if err := RunWithSignal(":1348", handler, signal); err != nil {
+			s := NewServer(":1348", handler)
+			if err := s.ListenServeAndSignal(signal); err != nil {
 				t.Fatal(err)
 			}
 		}()
