@@ -15,9 +15,11 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 	var (
 		key, value = "mykey", "hello"
+		errorMsg   = "Unexpected error"
 		rawMessage = fmt.Sprintf("*2\r\n$3\r\nGET\r\n$%d\r\n%s\r\n", len(key), key)
 		rawValue   = fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)
 		rawNil     = "$-1\r\n"
+		rawError   = fmt.Sprintf("-%s\r\n", errorMsg)
 	)
 
 	t.Run(`[Given] a key is available in "destination" 
@@ -55,7 +57,93 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 			}
 
 			assert.Equal(t, rawValue, reply, "reply should be equal to value")
-			assert.True(t, dstGET.Called, "redis should be called")
+			assert.True(t, dstGET.Called, "destination redis should be called")
+		}()
+
+		<-done
+	})
+
+	t.Run(`[Given] a key is not available in "destination"
+			 [And] "destination" return non-nil error
+		    [When] a GET request for the key is received
+		    [Then] return the error from "destination"`, func(t *testing.T) {
+
+		handler, _, dstMock := initHandlerMock()
+
+		dstGET := dstMock.Command("GET", []byte(key)).ExpectError(fmt.Errorf(errorMsg))
+
+		signal := make(chan error)
+		s := NewServer(":0", handler)
+		go func() {
+			defer s.Close()
+
+			if err := s.ListenServeAndSignal(signal); err != nil {
+				t.Fatal(err)
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			reply, err := doRequest(s.Addr().String(), rawMessage)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assert.Equal(t, rawError, reply, "reply should be equal to error message")
+			assert.True(t, dstGET.Called, "destination redis should be called")
+		}()
+
+		<-done
+	})
+
+	t.Run(`[Given] a key is not available in "destination"
+			 [And] "source" return non-nil error
+		    [When] a GET request for the key is received
+		    [Then] return the error from "source"`, func(t *testing.T) {
+
+		handler, srcMock, dstMock := initHandlerMock()
+
+		dstGET := dstMock.Command("GET", []byte(key)).ExpectError(nil)
+		srcGET := srcMock.Command("GET", []byte(key)).ExpectError(fmt.Errorf(errorMsg))
+
+		signal := make(chan error)
+		s := NewServer(":0", handler)
+		go func() {
+			defer s.Close()
+
+			if err := s.ListenServeAndSignal(signal); err != nil {
+				t.Fatal(err)
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			reply, err := doRequest(s.Addr().String(), rawMessage)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assert.Equal(t, rawError, reply, "reply should be equal to error message")
+			assert.True(t, dstGET.Called, "destination redis should be called")
+			assert.True(t, srcGET.Called, "source redis should be called")
 		}()
 
 		<-done
