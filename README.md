@@ -78,6 +78,7 @@ IdleTimeout = "30s"
 
 # Client configuration for "destination" redis
 [Destination]
+
 # Redis address
 Addr = "redis-destination:6379"
 
