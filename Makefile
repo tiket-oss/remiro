@@ -1,11 +1,21 @@
 TARGET = remiro
 PACKAGES := $(go list ./...)
 
-go.sum: go.mod
-	@go build
+.PHONY: lint-prepare
+lint-prepare:
+	@go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
+
+.PHONY: lint
+lint: lint-prepare
+	@golangci-lint run \
+		--enable=golint \
+		--enable=gocyclo \
+		--enable=goconst \
+		--enable=uncovert \
+		./...
 
 .PHONY: test
-test: go.sum
+test:
 	@go test $(PACKAGES)
 
 .PHONY: build
