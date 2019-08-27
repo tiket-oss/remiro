@@ -479,10 +479,56 @@ func Test_redisHandler_HandlePING(t *testing.T) {
 
 func Test_redisHandler_HandleDefault(t *testing.T) {
 
+	var tc = []struct {
+		rawMsg   string
+		cmd      string
+		args     [][]byte
+		reply    interface{}
+		replyRaw string
+	}{
+		{"*2\r\n$4\r\nECHO\r\n$11\r\n\"Hi World!\"\r\n", "ECHO", [][]byte{[]byte("\"Hi World!\"")}, []byte("Hi World!"), "$9\r\nHi World!\r\n"},
+	}
+
 	t.Run(`[When] any request except GET, SET, and PING is received
 		   [Then] forward the request to "destination"
 		    [And] return the response`, func(t *testing.T) {
 
+		for _, tt := range tc {
+			handler, _, dstMock := initHandlerMock()
+			dstCMD := dstMock.Command(tt.cmd, toInterfaceSlice(tt.args)...).Expect(tt.reply)
+
+			signal := make(chan error)
+			s := NewServer(":0", handler)
+			go func() {
+				defer s.Close()
+
+				if err := s.ListenServeAndSignal(signal); err != nil {
+					t.Fatal(err)
+				}
+			}()
+
+			done := make(chan bool)
+			go func() {
+				defer func() {
+					done <- true
+				}()
+
+				err := <-signal
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				reply, err := doRequest(s.Addr().String(), tt.rawMsg)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				assert.Equal(t, tt.replyRaw, reply, "reply should be equal to expectation")
+				assert.True(t, dstCMD.Called, "destination redis should be called")
+			}()
+
+			<-done
+		}
 	})
 }
 
@@ -525,4 +571,13 @@ func doRequest(addr, msg string) (reply string, err error) {
 
 	reply = string(buf[:n])
 	return
+}
+
+func toInterfaceSlice(args [][]byte) []interface{} {
+	iArgs := make([]interface{}, len(args))
+	for i, v := range args {
+		iArgs[i] = v
+	}
+
+	return iArgs
 }
