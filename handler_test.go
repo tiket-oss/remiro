@@ -436,9 +436,44 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 
 func Test_redisHandler_HandlePING(t *testing.T) {
 
+	var (
+		rawPing = "*1\r\n$4\r\nPING\r\n"
+		rawPong = "+PONG\r\n"
+	)
+
 	t.Run(`[When] a PING request is received
 		   [Then] return PONG`, func(t *testing.T) {
 
+		handler, _, _ := initHandlerMock()
+
+		signal := make(chan error)
+		s := NewServer(":0", handler)
+		go func() {
+			defer s.Close()
+
+			if err := s.ListenServeAndSignal(signal); err != nil {
+				t.Fatal(err)
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			reply, err := doRequest(s.Addr().String(), rawPing)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assert.Equal(t, rawPong, reply, "reply should be \"PONG\"")
+		}()
 	})
 }
 
