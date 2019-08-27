@@ -30,13 +30,14 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 		dstGET := dstMock.Command("GET", []byte(key)).Expect(value)
 
+		fatal := make(chan error)
 		signal := make(chan error)
 		s := NewServer(":0", handler)
 		go func() {
 			defer s.Close()
 
 			if err := s.ListenServeAndSignal(signal); err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 		}()
 
@@ -48,19 +49,19 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 			err := <-signal
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			assert.Equal(t, rawValue, reply, "reply should be equal to value")
 			assert.True(t, dstGET.Called, "destination redis should be called")
 		}()
 
-		<-done
+		waitForComplete(t, done, fatal)
 	})
 
 	t.Run(`[Given] a key is not available in "destination"
@@ -72,13 +73,14 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 		dstGET := dstMock.Command("GET", []byte(key)).ExpectError(fmt.Errorf(errorMsg))
 
+		fatal := make(chan error)
 		signal := make(chan error)
 		s := NewServer(":0", handler)
 		go func() {
 			defer s.Close()
 
 			if err := s.ListenServeAndSignal(signal); err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 		}()
 
@@ -90,19 +92,19 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 			err := <-signal
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			assert.Equal(t, rawError, reply, "reply should be equal to error message")
 			assert.True(t, dstGET.Called, "destination redis should be called")
 		}()
 
-		<-done
+		waitForComplete(t, done, fatal)
 	})
 
 	t.Run(`[Given] a key is not available in "destination"
@@ -115,13 +117,14 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		dstGET := dstMock.Command("GET", []byte(key)).ExpectError(nil)
 		srcGET := srcMock.Command("GET", []byte(key)).ExpectError(fmt.Errorf(errorMsg))
 
+		fatal := make(chan error)
 		signal := make(chan error)
 		s := NewServer(":0", handler)
 		go func() {
 			defer s.Close()
 
 			if err := s.ListenServeAndSignal(signal); err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 		}()
 
@@ -133,12 +136,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 			err := <-signal
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			assert.Equal(t, rawError, reply, "reply should be equal to error message")
@@ -146,7 +149,7 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 			assert.True(t, srcGET.Called, "source redis should be called")
 		}()
 
-		<-done
+		waitForComplete(t, done, fatal)
 	})
 
 	t.Run(`[Given] a key is not available in "destination"
@@ -163,13 +166,14 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		dstSET := dstMock.Command("SET", []byte(key), value).Expect("OK")
 		srcGET := srcMock.Command("GET", []byte(key)).Expect(value)
 
+		fatal := make(chan error)
 		signal := make(chan error)
 		s := NewServer(":0", handler)
 		go func() {
 			defer s.Close()
 
 			if err := s.ListenServeAndSignal(signal); err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 		}()
 
@@ -181,12 +185,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 			err := <-signal
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			assert.Equal(t, rawValue, reply, "reply should be equal to value")
@@ -195,7 +199,7 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 			assert.True(t, srcGET.Called, "source redis GET command should be called")
 		}()
 
-		<-done
+		waitForComplete(t, done, fatal)
 	})
 
 	t.Run(`[Given] a key is not available in "destination"
@@ -214,13 +218,14 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		srcGET := srcMock.Command("GET", []byte(key)).Expect(value)
 		srcDEL := srcMock.Command("DEL", []byte(key)).Expect(int64(1))
 
+		fatal := make(chan error)
 		signal := make(chan error)
 		s := NewServer(":0", handler)
 		go func() {
 			defer s.Close()
 
 			if err := s.ListenServeAndSignal(signal); err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 		}()
 
@@ -232,12 +237,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 			err := <-signal
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			assert.Equal(t, rawValue, reply, "reply should be equal to value")
@@ -247,7 +252,7 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 			assert.True(t, srcDEL.Called, "source redis DEL command should be called")
 		}()
 
-		<-done
+		waitForComplete(t, done, fatal)
 	})
 
 	t.Run(`[Given] a key is not available in "destination"
@@ -260,13 +265,14 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		dstGET := dstMock.Command("GET", []byte(key)).Expect(nil)
 		srcGET := srcMock.Command("GET", []byte(key)).Expect(nil)
 
+		fatal := make(chan error)
 		signal := make(chan error)
 		s := NewServer(":0", handler)
 		go func() {
 			defer s.Close()
 
 			if err := s.ListenServeAndSignal(signal); err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 		}()
 
@@ -278,12 +284,12 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 			err := <-signal
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			assert.Equal(t, rawNil, reply, "reply should be equal to nil")
@@ -291,7 +297,7 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 			assert.True(t, srcGET.Called, "source redis GET command should be called")
 		}()
 
-		<-done
+		waitForComplete(t, done, fatal)
 	})
 }
 
@@ -314,13 +320,14 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 
 		dstSET := dstMock.Command("SET", []byte(key), []byte(value)).Expect("OK")
 
+		fatal := make(chan error)
 		signal := make(chan error)
 		s := NewServer(":0", handler)
 		go func() {
 			defer s.Close()
 
 			if err := s.ListenServeAndSignal(signal); err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 		}()
 
@@ -332,19 +339,19 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 
 			err := <-signal
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			assert.Equal(t, rawOK, reply, "reply should be \"OK\"")
 			assert.True(t, dstSET.Called, "destination redis should be called")
 		}()
 
-		<-done
+		waitForComplete(t, done, fatal)
 	})
 
 	t.Run(`[Given] deleteOnSet set to false
@@ -357,13 +364,14 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 
 		dstSET := dstMock.Command("SET", []byte(key), []byte(value)).ExpectError(fmt.Errorf(errorMsg))
 
+		fatal := make(chan error)
 		signal := make(chan error)
 		s := NewServer(":0", handler)
 		go func() {
 			defer s.Close()
 
 			if err := s.ListenServeAndSignal(signal); err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 		}()
 
@@ -375,19 +383,19 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 
 			err := <-signal
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			assert.Equal(t, rawError, reply, "reply should be equal to error message")
 			assert.True(t, dstSET.Called, "destination redis should be called")
 		}()
 
-		<-done
+		waitForComplete(t, done, fatal)
 	})
 
 	t.Run(`[Given] deleteOnSet set to true
@@ -401,13 +409,14 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 		dstSET := dstMock.Command("SET", []byte(key), []byte(value)).Expect("OK")
 		srcDEL := srcMock.Command("DEL", []byte(key)).Expect(int64(1))
 
+		fatal := make(chan error)
 		signal := make(chan error)
 		s := NewServer(":0", handler)
 		go func() {
 			defer s.Close()
 
 			if err := s.ListenServeAndSignal(signal); err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 		}()
 
@@ -419,12 +428,12 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 
 			err := <-signal
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			reply, err := doRequest(s.Addr().String(), rawMessage)
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			assert.Equal(t, rawOK, reply, "reply should be \"OK\"")
@@ -446,13 +455,14 @@ func Test_redisHandler_HandlePING(t *testing.T) {
 
 		handler, _, _ := initHandlerMock()
 
+		fatal := make(chan error)
 		signal := make(chan error)
 		s := NewServer(":0", handler)
 		go func() {
 			defer s.Close()
 
 			if err := s.ListenServeAndSignal(signal); err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 		}()
 
@@ -464,12 +474,12 @@ func Test_redisHandler_HandlePING(t *testing.T) {
 
 			err := <-signal
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			reply, err := doRequest(s.Addr().String(), rawPing)
 			if err != nil {
-				t.Fatal(err)
+				fatal <- err
 			}
 
 			assert.Equal(t, rawPong, reply, "reply should be \"PONG\"")
@@ -501,13 +511,14 @@ func Test_redisHandler_HandleDefault(t *testing.T) {
 			handler, _, dstMock := initHandlerMock()
 			dstCMD := dstMock.Command(tt.cmd, toInterfaceSlice(tt.args)...).Expect(tt.reply)
 
+			fatal := make(chan error)
 			signal := make(chan error)
 			s := NewServer(":0", handler)
 			go func() {
 				defer s.Close()
 
 				if err := s.ListenServeAndSignal(signal); err != nil {
-					t.Fatal(err)
+					fatal <- err
 				}
 			}()
 
@@ -519,19 +530,19 @@ func Test_redisHandler_HandleDefault(t *testing.T) {
 
 				err := <-signal
 				if err != nil {
-					t.Fatal(err)
+					fatal <- err
 				}
 
 				reply, err := doRequest(s.Addr().String(), tt.rawMsg)
 				if err != nil {
-					t.Fatal(err)
+					fatal <- err
 				}
 
 				assert.Equal(t, tt.replyRaw, reply, "reply should be equal to expectation")
 				assert.True(t, dstCMD.Called, "destination redis should be called")
 			}()
 
-			<-done
+			waitForComplete(t, done, fatal)
 		}
 	})
 }
@@ -575,4 +586,13 @@ func doRequest(addr, msg string) (reply string, err error) {
 
 	reply = string(buf[:n])
 	return
+}
+
+func waitForComplete(t *testing.T, done chan bool, fatal chan error) {
+	select {
+	case <-done:
+		return
+	case err := <-fatal:
+		t.Fatal(err)
+	}
 }
