@@ -53,11 +53,11 @@ remiro -h 127.0.0.1 -p 6379 -c config.toml
 Configuration is supported via TOML format and has these following fields to adjust:
 
 ```toml
-# Determine whether to delete requestedkey from "source" redis 
+# Determine whether to delete requestedkey from "source" redis
 # on successful GET command
 DeleteOnGet = true
 
-# Determine whether to delete requested key from "source" redis 
+# Determine whether to delete requested key from "source" redis
 # on successful SET command
 DeleteOnSet = false
 
