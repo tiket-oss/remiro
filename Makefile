@@ -11,7 +11,7 @@ lint:
 		--enable=golint \
 		--enable=gocyclo \
 		--enable=goconst \
-		--enable=uncovert \
+		--enable=unconvert \
 		./...
 
 .PHONY: test
