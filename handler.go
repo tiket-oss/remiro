@@ -24,7 +24,10 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 	command := strings.ToUpper(string(cmd.Args[0]))
 	switch command {
 	case "GET":
-		args := toInterfaceSlice(cmd.Args[1:])
+		args := make([]interface{}, 0)
+		if len(cmd.Args) > 1 {
+			args = toInterfaceSlice(cmd.Args[1:])
+		}
 
 		dstConn := r.destinationPool.Get()
 		defer dstConn.Close()
@@ -70,7 +73,10 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		conn.WriteBulkString(reply)
 
 	case "SET":
-		args := toInterfaceSlice(cmd.Args[1:])
+		args := make([]interface{}, 0)
+		if len(cmd.Args) > 1 {
+			args = toInterfaceSlice(cmd.Args[1:])
+		}
 
 		dstConn := r.destinationPool.Get()
 		defer dstConn.Close()
@@ -98,7 +104,10 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		conn.WriteString("PONG")
 
 	default:
-		args := toInterfaceSlice(cmd.Args[1:])
+		args := make([]interface{}, 0)
+		if len(cmd.Args) > 1 {
+			args = toInterfaceSlice(cmd.Args[1:])
+		}
 
 		dstConn := r.destinationPool.Get()
 		defer dstConn.Close()
