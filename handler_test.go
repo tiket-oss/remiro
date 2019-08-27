@@ -572,12 +572,3 @@ func doRequest(addr, msg string) (reply string, err error) {
 	reply = string(buf[:n])
 	return
 }
-
-func toInterfaceSlice(args [][]byte) []interface{} {
-	iArgs := make([]interface{}, len(args))
-	for i, v := range args {
-		iArgs[i] = v
-	}
-
-	return iArgs
-}

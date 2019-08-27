@@ -24,13 +24,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 	command := strings.ToUpper(string(cmd.Args[0]))
 	switch command {
 	case "GET":
-		// NOTE: this is necessary as []interface{}, that are used in
-		// Do() method, have different memory representation, see:
-		// https://golang.org/doc/faq#convert_slice_of_interface
-		args := make([]interface{}, len(cmd.Args)-1)
-		for i, v := range cmd.Args[1:] {
-			args[i] = v
-		}
+		args := toInterfaceSlice(cmd.Args[1:])
 
 		dstConn := r.destinationPool.Get()
 		defer dstConn.Close()
@@ -76,10 +70,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		conn.WriteBulkString(reply)
 
 	case "SET":
-		args := make([]interface{}, len(cmd.Args)-1)
-		for i, v := range cmd.Args[1:] {
-			args[i] = v
-		}
+		args := toInterfaceSlice(cmd.Args[1:])
 
 		dstConn := r.destinationPool.Get()
 		defer dstConn.Close()
@@ -107,10 +98,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		conn.WriteString("PONG")
 
 	default:
-		args := make([]interface{}, len(cmd.Args)-1)
-		for i, v := range cmd.Args[1:] {
-			args[i] = v
-		}
+		args := toInterfaceSlice(cmd.Args[1:])
 
 		dstConn := r.destinationPool.Get()
 		defer dstConn.Close()
@@ -216,6 +204,15 @@ func writeResponse(conn redcon.Conn, reply interface{}) {
 		msg := fmt.Sprintf("Unrecognized reply: %v", resp)
 		conn.WriteError(msg)
 	}
+}
+
+func toInterfaceSlice(args [][]byte) []interface{} {
+	iArgs := make([]interface{}, len(args))
+	for i, v := range args {
+		iArgs[i] = v
+	}
+
+	return iArgs
 }
 
 func isRawReply(reply []byte) bool {
