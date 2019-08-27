@@ -3,3 +3,6 @@ remiro
 
 # Ignore local configuration file
 config.toml
+
+# E2E Testing stuff
+test/e2e/remiro-e2e-env
