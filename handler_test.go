@@ -299,8 +299,10 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 
 	var (
 		key, value = "mykey", "hello"
+		errorMsg   = "Unexpected error"
 		rawMessage = fmt.Sprintf("*3\r\n$3\r\nSET\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(key), key, len(value), value)
 		rawOK      = "+OK\r\n"
+		rawError   = fmt.Sprintf("-%s\r\n", errorMsg)
 	)
 
 	t.Run(`[Given] deleteOnSet set to false
@@ -308,6 +310,7 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 			[Then] SET the key with the value to "destination"`, func(t *testing.T) {
 
 		handler, _, dstMock := initHandlerMock()
+		handler.deleteOnSet = false
 
 		dstSET := dstMock.Command("SET", []byte(key), []byte(value)).Expect("OK")
 
@@ -344,11 +347,90 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 		<-done
 	})
 
+	t.Run(`[Given] deleteOnSet set to false
+			 [And] "destination" returns error
+			[When] a SET request for a key is received
+			[Then] returns the error message`, func(t *testing.T) {
+
+		handler, _, dstMock := initHandlerMock()
+		handler.deleteOnSet = false
+
+		dstSET := dstMock.Command("SET", []byte(key), []byte(value)).ExpectError(fmt.Errorf(errorMsg))
+
+		signal := make(chan error)
+		s := NewServer(":0", handler)
+		go func() {
+			defer s.Close()
+
+			if err := s.ListenServeAndSignal(signal); err != nil {
+				t.Fatal(err)
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			reply, err := doRequest(s.Addr().String(), rawMessage)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assert.Equal(t, rawError, reply, "reply should be equal to error message")
+			assert.True(t, dstSET.Called, "destination redis should be called")
+		}()
+
+		<-done
+	})
+
 	t.Run(`[Given] deleteOnSet set to true
 			[When] a SET request for a key is received
 			[Then] SET the key with the value to "destination"
 			 [And] DELETE the key from "source"`, func(t *testing.T) {
 
+		handler, srcMock, dstMock := initHandlerMock()
+		handler.deleteOnSet = true
+
+		dstSET := dstMock.Command("SET", []byte(key), []byte(value)).Expect("OK")
+		srcDEL := srcMock.Command("DEL", []byte(key)).Expect(1)
+
+		signal := make(chan error)
+		s := NewServer(":0", handler)
+		go func() {
+			defer s.Close()
+
+			if err := s.ListenServeAndSignal(signal); err != nil {
+				t.Fatal(err)
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			reply, err := doRequest(s.Addr().String(), rawMessage)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assert.Equal(t, rawOK, reply, "reply should be \"OK\"")
+			assert.True(t, dstSET.Called, "destination redis should be called")
+			assert.True(t, srcDEL.Called, "source redis DEL command should be called")
+		}()
 	})
 }
 
