@@ -486,9 +486,11 @@ func Test_redisHandler_HandleDefault(t *testing.T) {
 		reply    interface{}
 		replyRaw string
 	}{
-		{"*2\r\n$4\r\nECHO\r\n$11\r\n\"Hi World!\"\r\n", "ECHO", [][]byte{[]byte("\"Hi World!\"")}, []byte("Hi World!"), "$9\r\nHi World!\r\n"},
+		{"*2\r\n$4\r\nECHO\r\n$5\r\nHello\r\n", "ECHO", [][]byte{[]byte("Hello")}, "Hello", "+Hello\r\n"},
 		{"*3\r\n$4\r\nHGET\r\n$6\r\nmyhash\r\n$5\r\nfield\r\n", "HGET", [][]byte{[]byte("myhash"), []byte("field")}, nil, "$-1\r\n"},
 		{"*1\r\n$4\r\nHSET\r\n", "HSET", [][]byte{}, fmt.Errorf("Wrong number of args"), "-Wrong number of args\r\n"},
+		{"*2\r\n$3\r\nTTL\r\n$5\r\nmykey\r\n", "TTL", [][]byte{[]byte("mykey")}, 10, ":10\r\n"},
+		{"*1\r\n$7\r\nCOMMAND\r\n", "COMMAND", [][]byte{}, []interface{}{[]byte("GET"), []byte("SET")}, "*2\r\n$3\r\nGET\r\n$3\r\nSET\r\n"},
 	}
 
 	t.Run(`[When] any request except GET, SET, and PING is received
