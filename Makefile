@@ -6,7 +6,7 @@ lint-prepare:
 	@go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
 
 .PHONY: lint
-lint: lint-prepare
+lint:
 	@golangci-lint run \
 		--enable=golint \
 		--enable=gocyclo \
