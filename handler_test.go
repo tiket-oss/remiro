@@ -212,7 +212,7 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 		dstGET := dstMock.Command("GET", []byte(key)).Expect(nil)
 		dstSET := dstMock.Command("SET", []byte(key), value).Expect("OK")
 		srcGET := srcMock.Command("GET", []byte(key)).Expect(value)
-		srcDEL := srcMock.Command("DEL", []byte(key)).Expect(1)
+		srcDEL := srcMock.Command("DEL", []byte(key)).Expect(int64(1))
 
 		signal := make(chan error)
 		s := NewServer(":0", handler)
@@ -399,7 +399,7 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 		handler.deleteOnSet = true
 
 		dstSET := dstMock.Command("SET", []byte(key), []byte(value)).Expect("OK")
-		srcDEL := srcMock.Command("DEL", []byte(key)).Expect(1)
+		srcDEL := srcMock.Command("DEL", []byte(key)).Expect(int64(1))
 
 		signal := make(chan error)
 		s := NewServer(":0", handler)

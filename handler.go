@@ -66,7 +66,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 
 		if r.deleteOnGet && err == nil {
 			if err := deleteKey(srcConn, key); err != nil {
-				log.Error(err)
+				log.Warn(err)
 			}
 		}
 
@@ -94,7 +94,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 			defer srcConn.Close()
 
 			if err := deleteKey(srcConn, key); err != nil {
-				log.Error(err)
+				log.Warn(err)
 			}
 		}
 
