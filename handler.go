@@ -87,7 +87,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 			break
 		}
 
-		if r.deleteOnSet && err == nil {
+		if r.deleteOnSet {
 			key := cmd.Args[1]
 
 			srcConn := r.sourcePool.Get()
