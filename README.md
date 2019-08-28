@@ -41,3 +41,53 @@ With the assumption in place, we can establish a mechanism in which Remiro will 
   - (optional) Remiro will delete the data with the same key from **source**
 - If any other request came through remiro:
   - Simply proxy the request to the **destination**
+
+## How to use
+
+To run remiro, provide the host, port, and configuration file path via flag:
+
+```sh
+remiro -h 127.0.0.1 -p 6379 -c config.toml
+```
+
+Configuration is supported via TOML format and has these following fields to adjust:
+
+```toml
+# Determine whether to delete requestedkey from "source" redis
+# on successful GET command
+DeleteOnGet = true
+
+# Determine whether to delete requested key from "source" redis
+# on successful SET command
+DeleteOnSet = false
+
+# Client configuration for "source" redis
+[Source]
+
+# Redis address
+Addr = "redis-source:6379"
+
+# Connection pooling: determine how many maximum idle connections
+# to allow
+MaxIdleConns = 50
+
+# Connection pooling: determine how long a connection can be kept in
+# idle state before being closed. Format is based on golang ParseDuration
+# format: https://golang.org/pkg/time/#ParseDuration
+IdleTimeout = "30s"
+
+# Client configuration for "destination" redis
+[Destination]
+
+# Redis address
+Addr = "redis-destination:6379"
+
+# Connection pooling: determine how many maximum idle connections
+# to allow
+MaxIdleConns = 100
+
+# Connection pooling: determine how long a connection can be kept in
+# idle state before being closed. Format is based on golang ParseDuration
+# format: https://golang.org/pkg/time/#ParseDuration
+IdleTimeout = "45s"
+```

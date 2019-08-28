@@ -24,12 +24,9 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 	command := strings.ToUpper(string(cmd.Args[0]))
 	switch command {
 	case "GET":
-		// NOTE: this is necessary as []interface{}, that are used in
-		// Do() method, have different memory representation, see:
-		// https://golang.org/doc/faq#convert_slice_of_interface
-		args := make([]interface{}, len(cmd.Args)-1)
-		for i, v := range cmd.Args[1:] {
-			args[i] = v
+		args := make([]interface{}, 0)
+		if len(cmd.Args) > 1 {
+			args = toInterfaceSlice(cmd.Args[1:])
 		}
 
 		dstConn := r.destinationPool.Get()
@@ -50,27 +47,35 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		defer srcConn.Close()
 
 		reply, err = redis.String(srcConn.Do(command, args...))
-		if err == nil {
-			val := reply
-			key := cmd.Args[1]
-
-			_, err = redis.String(dstConn.Do("SET", key, val))
-			if err != nil {
-				log.Error(fmt.Errorf("Error when setting key %s: %v", key, err))
+		if err != nil {
+			if err == redis.ErrNil {
+				conn.WriteNull()
+			} else {
+				conn.WriteError(err.Error())
 			}
+			break
+		}
 
-			if r.deleteOnGet && err == nil {
-				if err := deleteKey(srcConn, key); err != nil {
-					log.Error(err)
-				}
+		val := reply
+		key := cmd.Args[1]
+
+		_, err = redis.String(dstConn.Do("SET", key, val))
+		if err != nil {
+			log.Error(fmt.Errorf("Error when setting key %s: %v", key, err))
+		}
+
+		if r.deleteOnGet && err == nil {
+			if err := deleteKey(srcConn, key); err != nil {
+				log.Warn(err)
 			}
 		}
+
 		conn.WriteBulkString(reply)
 
 	case "SET":
-		args := make([]interface{}, len(cmd.Args)-1)
-		for i, v := range cmd.Args[1:] {
-			args[i] = v
+		args := make([]interface{}, 0)
+		if len(cmd.Args) > 1 {
+			args = toInterfaceSlice(cmd.Args[1:])
 		}
 
 		dstConn := r.destinationPool.Get()
@@ -82,14 +87,14 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 			break
 		}
 
-		if r.deleteOnSet && err == nil {
+		if r.deleteOnSet {
 			key := cmd.Args[1]
 
 			srcConn := r.sourcePool.Get()
 			defer srcConn.Close()
 
 			if err := deleteKey(srcConn, key); err != nil {
-				log.Error(err)
+				log.Warn(err)
 			}
 		}
 
@@ -99,9 +104,9 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		conn.WriteString("PONG")
 
 	default:
-		args := make([]interface{}, len(cmd.Args)-1)
-		for i, v := range cmd.Args[1:] {
-			args[i] = v
+		args := make([]interface{}, 0)
+		if len(cmd.Args) > 1 {
+			args = toInterfaceSlice(cmd.Args[1:])
 		}
 
 		dstConn := r.destinationPool.Get()
@@ -208,6 +213,15 @@ func writeResponse(conn redcon.Conn, reply interface{}) {
 		msg := fmt.Sprintf("Unrecognized reply: %v", resp)
 		conn.WriteError(msg)
 	}
+}
+
+func toInterfaceSlice(args [][]byte) []interface{} {
+	iArgs := make([]interface{}, len(args))
+	for i, v := range args {
+		iArgs[i] = v
+	}
+
+	return iArgs
 }
 
 func isRawReply(reply []byte) bool {

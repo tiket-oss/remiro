@@ -14,11 +14,10 @@ func Run(addr string, handler Handler) error {
 	return redcon.ListenAndServe(addr, handler.Handle, handler.Accept, handler.Closed)
 }
 
-// RunWithSignal creates a new listener with specified address on TCP network.
-// It also passes nil or error to signal
-func RunWithSignal(addr string, handler Handler, signal chan error) error {
-	s := redcon.NewServer(addr, handler.Handle, handler.Accept, handler.Closed)
-	return s.ListenServeAndSignal(signal)
+// NewServer returns a new instance of *redcon.Server, useful when you want
+// to fine tune the server before running
+func NewServer(addr string, handler Handler) *redcon.Server {
+	return redcon.NewServer(addr, handler.Handle, handler.Accept, handler.Closed)
 }
 
 // Handler provide set of methods to handle incoming connection
