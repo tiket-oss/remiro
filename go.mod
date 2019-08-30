@@ -3,6 +3,7 @@ module github.com/tiket-libre/remiro
 go 1.12
 
 require (
+	contrib.go.opencensus.io/exporter/prometheus v0.1.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/gomodule/redigo v1.7.0
 	github.com/rafaeljusto/redigomock v0.0.0-20190202135759-257e089e14a1

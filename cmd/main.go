@@ -6,6 +6,7 @@ import (
 	"github.com/BurntSushi/toml"
 	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
+
 	"github.com/tiket-libre/remiro"
 )
 
@@ -20,11 +21,18 @@ func main() {
 
 	config, _ := readConfig(configPath)
 
+	instruErr := make(chan error)
+	if err := remiro.RunInstruExporter(":8888", instruErr); err != nil {
+		log.Fatalf("Failed to run instrumentation server: %v", err)
+	}
+
 	addr := fmt.Sprintf("%s:%s", host, port)
 	handler := remiro.NewRedisHandler(config)
 	if err := remiro.Run(addr, handler); err != nil {
 		log.Fatal(err)
 	}
+
+	log.Warn(<-instruErr)
 }
 
 func readConfig(configPath string) (remiro.RedisConfig, error) {
