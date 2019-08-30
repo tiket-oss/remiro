@@ -178,9 +178,9 @@ func newRedisPool(config ClientConfig) *redis.Pool {
 }
 
 func deleteKey(conn redis.Conn, key []byte) error {
-	nDel, err := redis.Int(conn.Do("DEL", key))
-	if nDel == 0 || err != nil {
-		return fmt.Errorf("Error when deleting key %s: %v (%d deleted)", key, err, nDel)
+	_, err := redis.Int(conn.Do("DEL", key))
+	if err != nil && err != redis.ErrNil {
+		return fmt.Errorf("Error when deleting key %s: %v", key, err)
 	}
 
 	return nil
