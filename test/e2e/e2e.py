@@ -188,8 +188,8 @@ if __name__ == "__main__":
     remiro_config = remiro_config_template.format(
         delete_on_set="false",
         delete_on_get="false",
-        src_addr='"{}:{}"'.format(redis_src_ip, redis_src_port),
-        dst_addr='"{}:{}"'.format(redis_dst_ip, redis_dst_port),
+        src_addr='"{}:{}"'.format(redis_src_ip, 6379),
+        dst_addr='"{}:{}"'.format(redis_dst_ip, 6379),
     )
     print(remiro_config)
 
@@ -201,6 +201,7 @@ if __name__ == "__main__":
     remiro_config_file = open(os.path.join(temp_dir.name, "config.toml"), mode="w+")
     try:
         remiro_config_file.writelines(remiro_config)
+        remiro_config_file.close()
         print("remiro_config_file: ", remiro_config_file.name)
         # remiro_config_file.name = "config.toml"
 
