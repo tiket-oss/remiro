@@ -5,6 +5,7 @@ import random
 import string
 import os
 import threading
+import time
 from datetime import datetime
 import redis
 from pprint import pprint
@@ -58,6 +59,21 @@ def random_id():
     return "{:0>3}".format(random.randrange(999))
 
 
+def run_container(client, name, image, command, network, volumes, ports=None):
+    print("Creating container: {}".format(name))
+    container = client.containers.run(
+        name=name,
+        image=image,
+        detach=True,
+        command=command,
+        network=network,
+        volumes=volumes,
+        ports=ports,
+    )
+    pprint(container.attrs)
+    return container
+
+
 if __name__ == "__main__":
 
     e2e_id = "e2e{}".format(random_id())
@@ -73,6 +89,11 @@ if __name__ == "__main__":
     redis_dst_port = 6420
     redis_src_expected_port = 6411
     redis_dst_expected_port = 6421
+
+    redis_src_dump = "redis_src_dump.rdb"
+    redis_dst_dump = "redis_dst_dump.rdb"
+    redis_dst_src_dump = "redis_dst_src_dump.rdb"
+    redis_dst_expected_dump = "redis_dst_expected_dump.rdb"
 
     default_bind_path = "/data"
     default_bind_volume = {"bind": default_bind_path, "mode": "rw"}
@@ -114,7 +135,7 @@ if __name__ == "__main__":
     e2e_test_volume = client.volumes.create(
         "e2e-test-volume-{}-{}".format(e2e_id, test_id)
     )
-    pprint(e2e_test_volume)
+    pprint(e2e_test_volume.attrs)
 
     # === setup volume container: intermediary container to copy files from host to volume ===
     client.images.pull("hello-world:latest")
@@ -126,53 +147,45 @@ if __name__ == "__main__":
     # ===
     print("Creating containers ...")
 
-    print("Creating redis-src container ...")
-    redis_src_container_name = "redis-src-{}-{}".format(e2e_id, test_id)
-    redis_src_container = client.containers.run(
-        name=redis_src_container_name,
+    redis_src_container = run_container(
+        client=client,
+        name="redis-src-{}-{}".format(e2e_id, test_id),
         image=redis_version,
-        detach=True,
-        command="redis-server",
+        command="redis-server --dir {} --dbfilename {}".format(
+            default_bind_path, redis_src_dump
+        ),
         network=e2e_test_network.name,
         volumes={e2e_test_volume.name: default_bind_volume},
-        # ports={"{}/tcp".format(redis_src_port): redis_src_port},
         ports={"6379/tcp": redis_src_port},
     )
-    print("redis-src: ", redis_src_container)
     async_print_container_log(redis_src_container)
 
-    print("Creating redis-dst container ...")
-    redis_dst_container_name = "redis-dst-{}-{}".format(e2e_id, test_id)
-    redis_dst_container = client.containers.run(
-        name=redis_dst_container_name,
+    redis_dst_container = run_container(
+        client,
+        name="redis-dst-{}-{}".format(e2e_id, test_id),
         image=redis_version,
-        detach=True,
-        command="redis-server",
+        command="redis-server --dir {} --dbfilename {}".format(
+            default_bind_path, redis_dst_dump
+        ),
         network=e2e_test_network.name,
         volumes={e2e_test_volume.name: default_bind_volume},
-        # ports={"{}/tcp".format(redis_dst_port): redis_dst_port},
         ports={"6379/tcp": redis_dst_port},
     )
-    print("redis-dst: ", redis_dst_container)
     async_print_container_log(redis_dst_container)
 
-    print("Creating rdb-tools container ...")
-    rdb_tools_container_name = "rdb-tools-{}-{}".format(e2e_id, test_id)
-    rdb_tools_container = client.containers.run(
-        name=rdb_tools_container_name,
+    rdb_tools_container = run_container(
+        client=client,
+        name="rdb-tools-{}-{}".format(e2e_id, test_id),
         image=rdb_tools_image.id,
-        detach=True,
         command="--help",
         network=e2e_test_network.name,
         volumes={e2e_test_volume.name: default_bind_volume},
     )
-    print("rdb-tools: ", rdb_tools_container)
     async_print_container_log(rdb_tools_container)
 
     print("Creating remiro container ...")
 
     print("NETWORK:")
-    # e2e_test_network.connect(redis_src_container)
     e2e_test_network.reload()
     pprint(e2e_test_network.attrs)
 
@@ -193,50 +206,45 @@ if __name__ == "__main__":
     )
     print(remiro_config)
 
-    remiro_config_path = "{}/config.toml".format(default_bind_path)
-
     temp_dir = tempfile.TemporaryDirectory()
-
-    # remiro_config_file = tempfile.NamedTemporaryFile(mode="w+t", delete=False)
     remiro_config_file = open(os.path.join(temp_dir.name, "config.toml"), mode="w+")
     try:
         remiro_config_file.writelines(remiro_config)
-        remiro_config_file.close()
-        print("remiro_config_file: ", remiro_config_file.name)
-        # remiro_config_file.name = "config.toml"
-
-        status_put_archive = api_client.put_archive(
-            e2e_test_volume_container.name,
-            default_bind_path,
-            simple_tar(remiro_config_file.name),
-        )
-        print("STATUS PUT_ARCHIVE: {}".format(status_put_archive))
-
     finally:
         remiro_config_file.close()
+    print("remiro_config_file: ", remiro_config_file.name)
 
-    remiro_container_name = "remiro-{}-{}".format(e2e_id, test_id)
-    remiro_container = client.containers.run(
-        name=remiro_container_name,
+    status_put_archive = api_client.put_archive(
+        e2e_test_volume_container.name,
+        default_bind_path,
+        simple_tar(remiro_config_file.name),
+    )
+    print("STATUS PUT_ARCHIVE: {}".format(status_put_archive))
+
+    # ===
+
+    remiro_config_path = "{}/config.toml".format(default_bind_path)
+
+    remiro_container = run_container(client=client,
+        name="remiro-{}-{}".format(e2e_id, test_id),
         image=remiro_image.id,
-        detach=True,
         command="-h 0.0.0.0 -p {} -c {}".format(remiro_port, remiro_config_path),
         network=e2e_test_network.name,
         volumes={e2e_test_volume.name: default_bind_volume},
         ports={"{}/tcp".format(remiro_port): remiro_port},
     )
-    print("remiro: ", remiro_container)
-    pprint(remiro_container.attrs)
     async_print_container_log(remiro_container)
 
-    # === TEST with Redis Client
-    # print("REDIS-SRC:")
-    # pprint(redis_src_container.attrs)
+    print("=== Test with Redis Client")
+    remiro_client = redis.Redis(host="127.0.0.1", port=remiro_port)
+    print(remiro_client.set("foo", "bar"))
+    print(remiro_client.get("foo"))
 
-    r = redis.Redis(host="127.0.0.1", port=remiro_port)
-    print(r.set("foo", "bar"))
-    print(r.get("foo"))
+    redis_src_client = redis.Redis(host="127.0.0.1", port=redis_src_port)
+    redis_src_client.save()
 
+    redis_dst_client = redis.Redis(host="127.0.0.1", port=redis_dst_port)
+    redis_dst_client.save()
     # ===
 
     # === Delete containers. (Temporarily)
@@ -258,8 +266,9 @@ if __name__ == "__main__":
 
     # Remove images, network
     print("Removing images, network, volume ...")
+
     # client.images.remove(image=rdb_tools_image.id)
     # client.images.remove(image=remiro_image.id)
 
     e2e_test_network.remove()
-    e2e_test_volume.remove()
+    # e2e_test_volume.remove()
