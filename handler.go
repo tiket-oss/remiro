@@ -1,9 +1,13 @@
 package remiro
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
+
+	"go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 
 	"github.com/gomodule/redigo/redis"
 	log "github.com/sirupsen/logrus"
@@ -21,6 +25,15 @@ type redisHandler struct {
 var replyTypeBytes = []byte{'+', '-', ':', '$', '*'}
 
 func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
+	startTime := time.Now()
+
+	reqCtx, err := tag.New(context.Background())
+	if err != nil {
+		log.Warnf("Failed to initialize instrumentation: %v", err)
+	}
+
+	defer stats.Record(reqCtx, reqLatencyMs.M(sinceInMs(startTime)))
+
 	command := strings.ToUpper(string(cmd.Args[0]))
 	switch command {
 	case "GET":
@@ -33,6 +46,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		defer dstConn.Close()
 
 		reply, err := redis.String(dstConn.Do(command, args...))
+		go recordRedisCmd("destination", "GET")
 		if err == nil {
 			conn.WriteBulkString(reply)
 			break
@@ -47,6 +61,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		defer srcConn.Close()
 
 		reply, err = redis.String(srcConn.Do(command, args...))
+		go recordRedisCmd("source", "GET")
 		if err != nil {
 			if err == redis.ErrNil {
 				conn.WriteNull()
@@ -60,6 +75,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		key := cmd.Args[1]
 
 		_, err = redis.String(dstConn.Do("SET", key, val))
+		go recordRedisCmd("destination", "SET")
 		if err != nil {
 			log.Error(fmt.Errorf("Error when setting key %s: %v", key, err))
 		}
@@ -68,6 +84,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 			if err := deleteKey(srcConn, key); err != nil {
 				log.Warn(err)
 			}
+			go recordRedisCmd("source", "DEL")
 		}
 
 		conn.WriteBulkString(reply)
@@ -82,6 +99,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		defer dstConn.Close()
 
 		reply, err := redis.String(dstConn.Do(command, args...))
+		go recordRedisCmd("destination", "SET")
 		if err != nil {
 			conn.WriteError(err.Error())
 			break
@@ -96,6 +114,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 			if err := deleteKey(srcConn, key); err != nil {
 				log.Warn(err)
 			}
+			go recordRedisCmd("source", "DEL")
 		}
 
 		conn.WriteString(reply)
@@ -113,6 +132,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		defer dstConn.Close()
 
 		reply, err := dstConn.Do(command, args...)
+		go recordRedisCmd("destination", command)
 		if err != nil {
 			if _, ok := err.(redis.Error); !ok {
 				log.Error(fmt.Errorf("Error when executing command %s: %v", command, err))
