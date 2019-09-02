@@ -40,8 +40,8 @@ var (
 		Description: "The latency distribution of requests",
 
 		// Latency in buckets:
-		// [>=0ms, >=25ms, >=50ms, >=75ms, >=100ms, >=200ms, >=400ms, >=600ms, >=800ms, >=1s]
-		Aggregation: view.Distribution(0, 25, 50, 75, 100, 200, 400, 600, 800, 1000),
+		// [>=0ms, >=10ms, >=25ms, >=50ms, >=75ms, >=100ms, >=150ms >=200ms]
+		Aggregation: view.Distribution(0, 10, 25, 50, 75, 100, 150, 200),
 	}
 
 	views = []*view.View{cmdCountView, reqLatencyView}
