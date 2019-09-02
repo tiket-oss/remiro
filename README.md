@@ -24,6 +24,10 @@ Remiro can act as an intermediary for populating the new redis server over time 
 - We want to move **data to move** from **source** to **destination**, while ignoring the **data to keep**
 - *IMPORTANT*: The system that will request through Remiro is the one that *only* needs the **data to move**
 
+The assumption can be represented by the following diagram
+
+![System Context diagram](docs/diagrams/out/system_context.png)
+
 With the assumption in place, we can establish a mechanism in which Remiro will adhere to:
 
 - If retrieval request came through remiro:
