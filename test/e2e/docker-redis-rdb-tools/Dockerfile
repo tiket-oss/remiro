@@ -4,4 +4,4 @@ RUN apk add gcc musl-dev
 
 RUN pip install  --no-cache-dir rdbtools python-lzf
 
-ENTRYPOINT [ "/usr/local/bin/rdb" ]
+CMD [ "/bin/sh" ]

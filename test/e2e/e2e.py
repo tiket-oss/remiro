@@ -10,6 +10,22 @@ from datetime import datetime
 import redis
 from pprint import pprint
 
+redis_version = "redis:5.0.5"
+
+remiro_port = 6400
+redis_src_port = 6410
+redis_dst_port = 6420
+redis_src_expected_port = 6411
+redis_dst_expected_port = 6421
+
+redis_src_dump = "redis_src_dump.rdb"
+redis_dst_dump = "redis_dst_dump.rdb"
+redis_src_expected_dump = "redis_src_expected_dump.rdb"
+redis_dst_expected_dump = "redis_dst_expected_dump.rdb"
+
+default_bind_path = "/data"
+default_bind_volume = {"bind": default_bind_path, "mode": "rw"}
+
 remiro_config_template = """
 DeleteOnGet = {delete_on_get}
 DeleteOnSet = {delete_on_set}
@@ -20,6 +36,18 @@ Addr = {src_addr}
 [Destination]
 Addr = {dst_addr}
 """
+
+test_cases = [
+    {
+        "id": "1234",
+        "name": "",
+        "test": {
+            "given": {"src": [], "dst": []},
+            "when": [],
+            "then": {"src": [], "dst": []},
+        },
+    }
+]
 
 
 def simple_tar(path):
@@ -74,61 +102,15 @@ def run_container(client, name, image, command, network, volumes, ports=None):
     return container
 
 
-if __name__ == "__main__":
-
-    e2e_id = "e2e{}".format(random_id())
-    print("e2e_id: {}".format(e2e_id))
-
-    test_id = "tid{}".format(random_id())
-    print("test_id: {}".format(test_id))
-
-    redis_version = "redis:5.0.5"
-
-    remiro_port = 6400
-    redis_src_port = 6410
-    redis_dst_port = 6420
-    redis_src_expected_port = 6411
-    redis_dst_expected_port = 6421
-
-    redis_src_dump = "redis_src_dump.rdb"
-    redis_dst_dump = "redis_dst_dump.rdb"
-    redis_dst_src_dump = "redis_dst_src_dump.rdb"
-    redis_dst_expected_dump = "redis_dst_expected_dump.rdb"
-
-    default_bind_path = "/data"
-    default_bind_volume = {"bind": default_bind_path, "mode": "rw"}
-
-    client = docker.from_env()
-
-    print("VERSION: ", client.version())
-
-    # Use api_client to 'docker cp' files from host to container
-    api_client = docker.APIClient()
-    print("API Client VERSION: ", api_client.version())
-
-    # pprint(vars(client.containers.list()))
-    for c in client.containers.list():
-        # pprint(vars(c.attrs))
-        pprint(c.attrs["Name"])
-
-    print("Building 'redis-rdb-tools' image ...")
-    rdb_tools_image, rdb_tools_log = client.images.build(
-        path="docker-redis-rdb-tools", tag="redis-rdb-tools-{}".format(e2e_id)
-    )
-    for log in rdb_tools_log:
-        print(log)
-    pprint(rdb_tools_image)
-
-    print("Building 'remiro' image ...")
-    remiro_image, remiro_image_log = client.images.build(
-        path="../../", tag="remiro-{}".format(e2e_id)
-    )
-    for log in remiro_image_log:
-        print(log)
-    pprint(remiro_image)
+def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_case):
+    # test_id = "tid{}".format(random_id())
+    test_id = test_case["id"]
+    print("test_id: {} test_name: {}".format(test_id, test_case["name"]))
 
     print("Creating 'e2e-test-network' ...")
-    e2e_test_network = client.networks.create("e2e-test-network-{}".format(e2e_id))
+    e2e_test_network = client.networks.create(
+        "e2e-test-network-{}-{}".format(e2e_id, test_id)
+    )
     pprint(e2e_test_network)
 
     print("Creating 'e2e-test-volume' ...")
@@ -173,15 +155,32 @@ if __name__ == "__main__":
     )
     async_print_container_log(redis_dst_container)
 
-    rdb_tools_container = run_container(
+    # Redis Expected Containers
+    redis_src_expected_container = run_container(
         client=client,
-        name="rdb-tools-{}-{}".format(e2e_id, test_id),
-        image=rdb_tools_image.id,
-        command="--help",
+        name="redis-src-expected-{}-{}".format(e2e_id, test_id),
+        image=redis_version,
+        command="redis-server --dir {} --dbfilename {}".format(
+            default_bind_path, redis_src_expected_dump
+        ),
         network=e2e_test_network.name,
         volumes={e2e_test_volume.name: default_bind_volume},
+        ports={"6379/tcp": redis_src_expected_port},
     )
-    async_print_container_log(rdb_tools_container)
+    async_print_container_log(redis_src_container)
+
+    redis_dst_expected_container = run_container(
+        client=client,
+        name="redis-dst-expected-{}-{}".format(e2e_id, test_id),
+        image=redis_version,
+        command="redis-server --dir {} --dbfilename {}".format(
+            default_bind_path, redis_dst_expected_dump
+        ),
+        network=e2e_test_network.name,
+        volumes={e2e_test_volume.name: default_bind_volume},
+        ports={"6379/tcp": redis_dst_expected_port},
+    )
+    async_print_container_log(redis_dst_container)
 
     print("Creating remiro container ...")
 
@@ -225,7 +224,8 @@ if __name__ == "__main__":
 
     remiro_config_path = "{}/config.toml".format(default_bind_path)
 
-    remiro_container = run_container(client=client,
+    remiro_container = run_container(
+        client=client,
         name="remiro-{}-{}".format(e2e_id, test_id),
         image=remiro_image.id,
         command="-h 0.0.0.0 -p {} -c {}".format(remiro_port, remiro_config_path),
@@ -236,6 +236,8 @@ if __name__ == "__main__":
     async_print_container_log(remiro_container)
 
     print("=== Test with Redis Client")
+    test = test_case["test"]
+
     remiro_client = redis.Redis(host="127.0.0.1", port=remiro_port)
     print(remiro_client.set("foo", "bar"))
     print(remiro_client.get("foo"))
@@ -245,9 +247,56 @@ if __name__ == "__main__":
 
     redis_dst_client = redis.Redis(host="127.0.0.1", port=redis_dst_port)
     redis_dst_client.save()
+
+    redis_src_expected_client = redis.Redis(
+        host="127.0.0.1", port=redis_src_expected_port
+    )
+    redis_src_expected_client.save()
+
+    redis_dst_expected_client = redis.Redis(
+        host="127.0.0.1", port=redis_dst_expected_port
+    )
+    redis_dst_expected_client.save()
     # ===
 
-    # === Delete containers. (Temporarily)
+    rdb_tools_container = run_container(
+        client=client,
+        name="rdb-tools-{}-{}".format(e2e_id, test_id),
+        image=rdb_tools_image.id,
+        command="""
+        /bin/sh -c "
+        rdb --command diff /data/{} | sort > /data/{}.txt;
+        rdb --command diff /data/{} | sort > /data/{}.txt;
+        rdb --command diff /data/{} | sort > /data/{}.txt;
+        rdb --command diff /data/{} | sort > /data/{}.txt;
+        diff /data/{}.txt /data/{}.txt && diff /data/{}.txt /data/{}.txt;
+        echo $?
+        " 
+        """.format(
+            redis_src_dump,
+            redis_src_dump,
+            redis_dst_dump,
+            redis_dst_dump,
+            redis_src_expected_dump,
+            redis_src_expected_dump,
+            redis_dst_expected_dump,
+            redis_dst_expected_dump,
+            redis_src_dump,
+            redis_src_expected_dump,
+            redis_dst_dump,
+            redis_dst_expected_dump,
+        ),
+        network=e2e_test_network.name,
+        volumes={e2e_test_volume.name: default_bind_volume},
+    )
+
+    last_cmd_status = str(
+        list(rdb_tools_container.logs(stream=True))[-1], "utf-8"
+    ).strip()
+
+    is_expected = last_cmd_status == "0"
+
+    # === Delete containers, volume, network.
     e2e_test_volume_container.stop()
     e2e_test_volume_container.remove()
 
@@ -262,13 +311,71 @@ if __name__ == "__main__":
 
     redis_dst_container.stop()
     redis_dst_container.remove()
+
+    redis_src_expected_container.stop()
+    redis_src_expected_container.remove()
+
+    redis_dst_expected_container.stop()
+    redis_dst_expected_container.remove()
     # ===
 
+    e2e_test_network.remove()
+    e2e_test_volume.remove()
+
+    return is_expected
+
+
+if __name__ == "__main__":
+
+    e2e_id = "e2e{}".format(random_id())
+    print("e2e_id: {}".format(e2e_id))
+
+    client = docker.from_env()
+
+    print("VERSION: ", client.version())
+
+    # Use api_client to 'docker cp' files from host to container
+    api_client = docker.APIClient()
+    print("API Client VERSION: ", api_client.version())
+
+    # pprint(vars(client.containers.list()))
+    for c in client.containers.list():
+        # pprint(vars(c.attrs))
+        pprint(c.attrs["Name"])
+
+    print("Building 'redis-rdb-tools' image ...")
+    rdb_tools_image, rdb_tools_log = client.images.build(
+        path="docker-redis-rdb-tools", tag="redis-rdb-tools-{}".format(e2e_id)
+    )
+    for log in rdb_tools_log:
+        print(log)
+    pprint(rdb_tools_image)
+
+    print("Building 'remiro' image ...")
+    remiro_image, remiro_image_log = client.images.build(
+        path="../../", tag="remiro-{}".format(e2e_id)
+    )
+    for log in remiro_image_log:
+        print(log)
+    pprint(remiro_image)
+
+    # ==== Run a test ===
+
+    for tc in test_cases:
+
+        is_expected = run_test(
+            client=client,
+            api_client=api_client,
+            remiro_image=remiro_image,
+            rdb_tools_image=rdb_tools_image,
+            e2e_id=e2e_id,
+            test_case=tc,
+        )
+
     # Remove images, network
-    print("Removing images, network, volume ...")
+    # print("Removing images, network, volume ...")
 
     # client.images.remove(image=rdb_tools_image.id)
     # client.images.remove(image=remiro_image.id)
 
-    e2e_test_network.remove()
-    # e2e_test_volume.remove()
+    # print("VOLUME ID: {}".format(e2e_test_volume.id))
