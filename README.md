@@ -93,3 +93,14 @@ MaxIdleConns = 100
 # format: https://golang.org/pkg/time/#ParseDuration
 IdleTimeout = "45s"
 ```
+
+## Instrumentation
+
+Remiro supports some instrumentation metrics that are useful to gauge redis usage:
+
+| Metrics                | Description                                                 | Unit  |
+| ---------------------- | ----------------------------------------------------------- | ----- |
+| remiro_command_count   | The count of outgoing request to supporting Redis instances | count |
+| remiro_request_latency | Time it took to serve a request through remiro              | ms    |
+
+The instrumentation is compatible with Prometheus only, and is accessible by scrapping the `http://<host>:8888/metrics` endpoint.

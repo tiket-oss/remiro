@@ -132,6 +132,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		defer dstConn.Close()
 
 		reply, err := dstConn.Do(command, args...)
+		go recordRedisCmd("destination", command)
 		if err != nil {
 			if _, ok := err.(redis.Error); !ok {
 				log.Error(fmt.Errorf("Error when executing command %s: %v", command, err))
