@@ -48,6 +48,8 @@ With the assumption in place, we can establish a mechanism in which Remiro will 
 - If any other request came through remiro:
   - Simply proxy the request to the **destination**
 
+![Activity diagram](docs/diagrams/out/flow.png)
+
 ## How to use
 
 To run remiro, provide the host, port, and configuration file path via flag:
