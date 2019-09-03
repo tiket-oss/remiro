@@ -1,6 +1,7 @@
-[![Build Status](https://travis-ci.com/tiket-libre/remiro.svg?branch=master)](https://travis-ci.com/tiket-libre/remiro)
-
 # Remiro
+
+[![Build Status](https://travis-ci.com/tiket-libre/remiro.svg?branch=master)](https://travis-ci.com/tiket-libre/remiro)
+[![codecov](https://codecov.io/gh/tiket-libre/remiro/branch/master/graph/badge.svg)](https://codecov.io/gh/tiket-libre/remiro)
 
 Remiro is a service that serves as a proxy in front of multiple Redis server.
 
