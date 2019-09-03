@@ -7,12 +7,16 @@ package remiro
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"contrib.go.opencensus.io/exporter/prometheus"
 	"go.opencensus.io/stats"
+	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 
 	"github.com/gomodule/redigo/redis"
@@ -23,6 +27,33 @@ import (
 // Run creates a new Listener with specified address on TCP network.
 func Run(addr string, handler Handler) error {
 	return redcon.ListenAndServe(addr, handler.Handle, handler.Accept, handler.Closed)
+}
+
+// RunInstrumentation adds a HTTP server which provides endpoint to check
+// server health and another endpoint to provide instrumentation metrics
+func RunInstrumentation(addr string, handler Handler, errSignal chan error) error {
+	if err := view.Register(views...); err != nil {
+		return err
+	}
+
+	pe, err := prometheus.NewExporter(prometheus.Options{
+		Namespace: "remiro",
+	})
+	if err != nil {
+		return err
+	}
+
+	view.RegisterExporter(pe)
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", pe)
+		mux.Handle("/health", http.HandlerFunc(handler.HealthCheck))
+		if err := http.ListenAndServe(addr, mux); err != nil {
+			errSignal <- err
+		}
+	}()
+
+	return nil
 }
 
 // NewServer returns a new instance of *redcon.Server, useful when you want
@@ -36,6 +67,8 @@ type Handler interface {
 	Handle(conn redcon.Conn, cmd redcon.Command)
 	Accept(conn redcon.Conn) bool
 	Closed(conn redcon.Conn, err error)
+
+	HealthCheck(w http.ResponseWriter, req *http.Request)
 }
 
 // redisHandler is an implementation of Handler
@@ -179,6 +212,49 @@ func (r *redisHandler) Closed(conn redcon.Conn, err error) {
 
 }
 
+func (r *redisHandler) HealthCheck(w http.ResponseWriter, req *http.Request) {
+	srcConn := r.sourcePool.Get()
+	_, srcErr := redis.String(srcConn.Do("PING"))
+
+	dstConn := r.destinationPool.Get()
+	_, dstErr := redis.String(dstConn.Do("PING"))
+
+	var status int
+	if srcErr != nil || dstErr != nil {
+		status = http.StatusInternalServerError
+	} else {
+		status = http.StatusOK
+	}
+
+	buildRedisReport := func(err error) map[string]string {
+		report := make(map[string]string)
+		if err != nil {
+			report["status"] = "Error"
+			report["error"] = err.Error()
+		} else {
+			report["status"] = "OK"
+		}
+
+		return report
+	}
+
+	body := map[string]map[string]string{
+		"sourceRedis":      buildRedisReport(srcErr),
+		"destinationRedis": buildRedisReport(dstErr),
+	}
+	rawBody, err := json.Marshal(body)
+	if err != nil {
+		log.Errorf("Failed to marshal response body: %v", err)
+	}
+
+	w.WriteHeader(status)
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(rawBody)
+	if err != nil {
+		log.Error(err)
+	}
+}
+
 type duration struct {
 	time.Duration
 }
@@ -192,6 +268,7 @@ func (d *duration) UnmarshalText(text []byte) error {
 // ClientConfig holds the configuration for Redis client
 type ClientConfig struct {
 	Addr         string
+	Password     string
 	MaxIdleConns int
 	IdleTimeout  duration
 }
@@ -217,11 +294,16 @@ func NewRedisHandler(config RedisConfig) Handler {
 }
 
 func newRedisPool(config ClientConfig) *redis.Pool {
+	options := make([]redis.DialOption, 0)
+	if config.Password != "" {
+		options = append(options, redis.DialPassword(config.Password))
+	}
+
 	return &redis.Pool{
 		MaxIdle:     config.MaxIdleConns,
 		IdleTimeout: config.IdleTimeout.Duration,
 		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", config.Addr)
+			return redis.Dial("tcp", config.Addr, options...)
 		},
 	}
 }

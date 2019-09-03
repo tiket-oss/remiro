@@ -2,10 +2,8 @@ package remiro
 
 import (
 	"context"
-	"net/http"
 	"time"
 
-	"contrib.go.opencensus.io/exporter/prometheus"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
@@ -54,28 +52,4 @@ func sinceInMs(startTime time.Time) float64 {
 func recordRedisCmd(target, command string) {
 	ctx, _ := tag.New(context.Background(), tag.Insert(keyTarget, target), tag.Insert(keyCommand, command))
 	stats.Record(ctx, redisCmdCount.M(1))
-}
-
-func RunInstruExporter(addr string, errSignal chan error) error {
-	if err := view.Register(views...); err != nil {
-		return err
-	}
-
-	pe, err := prometheus.NewExporter(prometheus.Options{
-		Namespace: "remiro",
-	})
-	if err != nil {
-		return err
-	}
-
-	view.RegisterExporter(pe)
-	go func() {
-		mux := http.NewServeMux()
-		mux.Handle("/metrics", pe)
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			errSignal <- err
-		}
-	}()
-
-	return nil
 }
