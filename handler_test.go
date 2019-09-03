@@ -441,6 +441,52 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 			assert.True(t, srcDEL.Called, "source redis DEL command should be called")
 		}()
 	})
+
+	t.Run(`[Given] deleteOnSet set to true
+			 [And] the key has been deleted
+			[When] a SET request for a key is received
+			[Then] SET the key with the value to "destination"
+			 [And] Don't DELETE the key from "source"`, func(t *testing.T) {
+
+		handler, srcMock, dstMock := initHandlerMock()
+		handler.deleteOnSet = true
+		handler.deletedKey[key] = true
+
+		dstSET := dstMock.Command("SET", []byte(key), []byte(value)).Expect("OK")
+		srcDEL := srcMock.Command("DEL", []byte(key)).Expect(int64(1))
+
+		fatal := make(chan error)
+		signal := make(chan error)
+		s := NewServer(":0", handler)
+		go func() {
+			defer s.Close()
+
+			if err := s.ListenServeAndSignal(signal); err != nil {
+				fatal <- err
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				fatal <- err
+			}
+
+			reply, err := doRequest(s.Addr().String(), rawMessage)
+			if err != nil {
+				fatal <- err
+			}
+
+			assert.Equal(t, rawOK, reply, "reply should be \"OK\"")
+			assert.True(t, dstSET.Called, "destination redis should be called")
+			assert.False(t, srcDEL.Called, "source redis DEL command should not be called")
+		}()
+	})
 }
 
 func Test_redisHandler_HandlePING(t *testing.T) {
@@ -550,16 +596,18 @@ func Test_redisHandler_HandleDefault(t *testing.T) {
 func initHandlerMock() (handler *redisHandler, srcMock, dstMock *redigomock.Conn) {
 	srcMock = redigomock.NewConn()
 	dstMock = redigomock.NewConn()
-	handler = &redisHandler{
-		sourcePool: &redis.Pool{
-			Dial: func() (redis.Conn, error) {
-				return srcMock, nil
-			},
+
+	var config = RedisConfig{}
+	handler = NewRedisHandler(config).(*redisHandler)
+
+	handler.sourcePool = &redis.Pool{
+		Dial: func() (redis.Conn, error) {
+			return srcMock, nil
 		},
-		destinationPool: &redis.Pool{
-			Dial: func() (redis.Conn, error) {
-				return dstMock, nil
-			},
+	}
+	handler.destinationPool = &redis.Pool{
+		Dial: func() (redis.Conn, error) {
+			return dstMock, nil
 		},
 	}
 

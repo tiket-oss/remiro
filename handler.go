@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opencensus.io/stats"
@@ -43,6 +44,8 @@ type redisHandler struct {
 	destinationPool *redis.Pool
 	deleteOnGet     bool
 	deleteOnSet     bool
+	deletedKey      map[string]bool
+	sync.Mutex
 }
 
 var replyTypeBytes = []byte{'+', '-', ':', '$', '*'}
@@ -128,14 +131,16 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 			break
 		}
 
-		if r.deleteOnSet {
-			key := cmd.Args[1]
-
+		if key := cmd.Args[1]; r.deleteOnSet && !r.deletedKey[string(key)] {
 			srcConn := r.sourcePool.Get()
 			defer srcConn.Close()
 
 			if err := deleteKey(srcConn, key); err != nil {
 				log.Warn(err)
+			} else {
+				r.Lock()
+				r.deletedKey[string(key)] = true
+				r.Unlock()
 			}
 			go recordRedisCmd("source", "DEL")
 		}
@@ -207,6 +212,7 @@ func NewRedisHandler(config RedisConfig) Handler {
 		destinationPool: newRedisPool(config.Destination),
 		deleteOnGet:     config.DeleteOnGet,
 		deleteOnSet:     config.DeleteOnSet,
+		deletedKey:      make(map[string]bool),
 	}
 }
 
