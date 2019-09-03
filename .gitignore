@@ -3,3 +3,6 @@ remiro
 
 # Ignore local configuration file
 config.toml
+
+# Ignore test coverage reports
+coverage.txt
