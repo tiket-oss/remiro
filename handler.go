@@ -268,6 +268,7 @@ func (d *duration) UnmarshalText(text []byte) error {
 // ClientConfig holds the configuration for Redis client
 type ClientConfig struct {
 	Addr         string
+	Password     string
 	MaxIdleConns int
 	IdleTimeout  duration
 }
@@ -293,11 +294,16 @@ func NewRedisHandler(config RedisConfig) Handler {
 }
 
 func newRedisPool(config ClientConfig) *redis.Pool {
+	options := make([]redis.DialOption, 0)
+	if config.Password != "" {
+		options = append(options, redis.DialPassword(config.Password))
+	}
+
 	return &redis.Pool{
 		MaxIdle:     config.MaxIdleConns,
 		IdleTimeout: config.IdleTimeout.Duration,
 		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", config.Addr)
+			return redis.Dial("tcp", config.Addr, options...)
 		},
 	}
 }
