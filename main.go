@@ -7,7 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
 
-	"github.com/tiket-libre/remiro"
+	"github.com/tiket-libre/remiro/handler"
 )
 
 func main() {
@@ -22,23 +22,23 @@ func main() {
 
 	config, _ := readConfig(configPath)
 	addr := fmt.Sprintf("%s:%s", host, port)
-	handler := remiro.NewRedisHandler(config)
+	redisHandler := handler.NewRedisHandler(config)
 	instruAddr := fmt.Sprintf("%s:%s", host, instruPort)
 
 	instruErr := make(chan error)
-	if err := remiro.RunInstrumentation(instruAddr, handler, instruErr); err != nil {
+	if err := handler.RunInstrumentation(instruAddr, redisHandler, instruErr); err != nil {
 		log.Fatalf("Failed to run instrumentation server: %v", err)
 	}
 
-	if err := remiro.Run(addr, handler); err != nil {
+	if err := handler.Run(addr, redisHandler); err != nil {
 		log.Fatal(err)
 	}
 
 	log.Warn(<-instruErr)
 }
 
-func readConfig(configPath string) (remiro.RedisConfig, error) {
-	var config remiro.RedisConfig
+func readConfig(configPath string) (handler.RedisConfig, error) {
+	var config handler.RedisConfig
 	_, err := toml.DecodeFile(configPath, &config)
 
 	return config, err
