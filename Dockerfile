@@ -6,6 +6,6 @@ WORKDIR /app
 
 COPY . .
 
-RUN go build -o remiro ./cmd
+RUN go build -o remiro 
 
 ENTRYPOINT ["/app/remiro"]
