@@ -123,3 +123,19 @@ To set specific port for instrumentation capability you can use the `-i` flag, o
 ```sh
 remiro -h 127.0.0.1 -p 6379 -c config.toml -i 9000
 ```
+
+### Health check
+
+An endpoint for observing server health is available at `/health` endpoint. Aside from the standard "200 if server is healthy, 500 otherwise", it also returns a JSON response containing information of individual Redis server status:
+
+```json
+{
+  "destinationRedis": {
+    "status": "OK"
+  },
+  "sourceRedis": {
+    "status": "Error",
+    "error": "Error message sent from source redis"
+  }
+}
+```
