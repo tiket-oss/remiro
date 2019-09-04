@@ -1,9 +1,9 @@
-// Package remiro provides service to manipulate request across several redis instances.
+// Package handler defines the mechanics to manipulate request across several redis instances.
 //
 // It works by mimicking redis, listening for packets over TCP that complies with
 // REdis Serialization Protocol (RESP), and then parsing the Redis command which
 // might be modified before being routed against a real Redis server.
-package remiro
+package handler
 
 import (
 	"context"
@@ -24,13 +24,32 @@ import (
 	"github.com/tidwall/redcon"
 )
 
+// Handler provide set of methods to handle incoming connection.
+type Handler interface {
+	Handle(conn redcon.Conn, cmd redcon.Command)
+	Accept(conn redcon.Conn) bool
+	Closed(conn redcon.Conn, err error)
+
+	HealthCheck(w http.ResponseWriter, req *http.Request)
+}
+
 // Run creates a new Listener with specified address on TCP network.
+// The Listener will then use a Handler to process incoming connection.
 func Run(addr string, handler Handler) error {
 	return redcon.ListenAndServe(addr, handler.Handle, handler.Accept, handler.Closed)
 }
 
-// RunInstrumentation adds a HTTP server which provides endpoint to check
-// server health and another endpoint to provide instrumentation metrics
+// NewServer returns a new instance of *redcon.Server, using Handler as its
+// connection processor. The difference with Run() function is that the server instance
+// is not listening to any address yet, making it useful when you want configure the server
+// before running it.
+func NewServer(addr string, handler Handler) *redcon.Server {
+	return redcon.NewServer(addr, handler.Handle, handler.Accept, handler.Closed)
+}
+
+// RunInstrumentation creates and run a HTTP server which provides a couple of endpoints:
+// - /health to check server health
+// - /metrics to provide instrumentation metrics
 func RunInstrumentation(addr string, handler Handler, errSignal chan error) error {
 	if err := view.Register(views...); err != nil {
 		return err
@@ -54,21 +73,6 @@ func RunInstrumentation(addr string, handler Handler, errSignal chan error) erro
 	}()
 
 	return nil
-}
-
-// NewServer returns a new instance of *redcon.Server, useful when you want
-// to fine tune the server before running
-func NewServer(addr string, handler Handler) *redcon.Server {
-	return redcon.NewServer(addr, handler.Handle, handler.Accept, handler.Closed)
-}
-
-// Handler provide set of methods to handle incoming connection
-type Handler interface {
-	Handle(conn redcon.Conn, cmd redcon.Command)
-	Accept(conn redcon.Conn) bool
-	Closed(conn redcon.Conn, err error)
-
-	HealthCheck(w http.ResponseWriter, req *http.Request)
 }
 
 // redisHandler is an implementation of Handler
@@ -242,15 +246,10 @@ func (r *redisHandler) HealthCheck(w http.ResponseWriter, req *http.Request) {
 		"sourceRedis":      buildRedisReport(srcErr),
 		"destinationRedis": buildRedisReport(dstErr),
 	}
-	rawBody, err := json.Marshal(body)
-	if err != nil {
-		log.Errorf("Failed to marshal response body: %v", err)
-	}
 
-	w.WriteHeader(status)
 	w.Header().Set("Content-Type", "application/json")
-	_, err = w.Write(rawBody)
-	if err != nil {
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(body); err != nil {
 		log.Error(err)
 	}
 }

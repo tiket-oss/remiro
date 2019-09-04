@@ -76,6 +76,9 @@ DeleteOnSet = false
 # Redis address
 Addr = "redis-source:6379"
 
+# Password to use when connecting to Redis server
+Password = "foobared"
+
 # Connection pooling: determine how many maximum idle connections
 # to allow
 MaxIdleConns = 50
@@ -90,6 +93,9 @@ IdleTimeout = "30s"
 
 # Redis address
 Addr = "redis-destination:6379"
+
+# Password to use when connecting to Redis server
+Password = "foobared"
 
 # Connection pooling: determine how many maximum idle connections
 # to allow
@@ -110,4 +116,26 @@ Remiro supports some instrumentation metrics that are useful to gauge redis usag
 | remiro_command_count   | The count of outgoing request to supporting Redis instances | count |
 | remiro_request_latency | Time it took to serve a request through remiro              | ms    |
 
-The instrumentation is compatible with Prometheus only, and is accessible by scrapping the `http://<host>:8888/metrics` endpoint.
+The instrumentation is compatible with Prometheus only, and is accessible by scrapping the `/metrics` endpoint.
+
+To set specific port for instrumentation capability you can use the `-i` flag, otherwise it defaults to `:8888`
+
+```sh
+remiro -h 127.0.0.1 -p 6379 -c config.toml -i 9000
+```
+
+### Health check
+
+An endpoint for observing server health is available at `/health` endpoint. Aside from the standard "200 if server is healthy, 500 otherwise", it also returns a JSON response containing information of individual Redis server status:
+
+```json
+{
+  "destinationRedis": {
+    "status": "OK"
+  },
+  "sourceRedis": {
+    "status": "Error",
+    "error": "Error message sent from source redis"
+  }
+}
+```

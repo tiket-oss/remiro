@@ -5,7 +5,6 @@ builds:
 - env:
   - CGO_ENABLED=0
   - GO111MODULE=on
-  main: ./cmd/main.go
 archives:
 - name_template: "{{ .ProjectName }}-{{ .Version }}_{{ .Os }}_{{ .Arch }}"
   replacements:

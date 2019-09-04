@@ -1,4 +1,4 @@
-package remiro
+package handler
 
 import (
 	"fmt"
