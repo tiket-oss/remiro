@@ -6,11 +6,11 @@ import tarfile
 import tempfile
 import threading
 import time
-from datetime import datetime
 from pprint import pprint
 
 import docker
 import redis
+
 
 REDIS_VERSION = "redis:5.0.5"
 
@@ -59,12 +59,12 @@ TEST_CASES = [
             },
             "when_req_then_resp": [
                 {"req": {"set": {"name": "foo", "value": "car"}}, "resp": None},
-                {"req": {"set": {"name": "foo", "value": "wherel"}}, "resp": None},
+                {"req": {"set": {"name": "foo", "value": "where1"}}, "resp": None},
             ],
             "then_data": {
                 "src": [],
                 "dst": [
-                    {"set": {"name": "foo", "value": "bar"}},
+                    {"set": {"name": "foo", "value": "where1"}},
                     {"set": {"name": "roo", "value": "car"}},
                 ],
             },
