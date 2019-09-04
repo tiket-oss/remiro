@@ -28,7 +28,7 @@ REDIS_DST_EXPECTED_DUMP = "redis_dst_expected_dump.rdb"
 DEFAULT_BIND_PATH = "/data"
 DEFAULT_BIND_VOLUME = {"bind": DEFAULT_BIND_PATH, "mode": "rw"}
 
-REMIRO_CONFIG_DEFAULT = {"delete_on_get": "true", "delete_on_set": "true"}
+REMIRO_CONFIG_DEFAULT = {"delete_on_get": "true", "delete_on_set": "false"}
 REMIRO_CONFIG_TEMPLATE = """
 DeleteOnGet = {delete_on_get}
 DeleteOnSet = {delete_on_set}
@@ -58,11 +58,8 @@ TEST_CASES = [
                 ],
             },
             "when_req_then_resp": [
-                {"req": {"set": {"name": "foo", "value": "car"}}, "resp": "HALO RESP"},
-                {
-                    "req": {"set": {"name": "foo", "value": "wherel"}},
-                    "resp": "HALO RESP WHERE",
-                },
+                {"req": {"set": {"name": "foo", "value": "car"}}, "resp": None},
+                {"req": {"set": {"name": "foo", "value": "wherel"}}, "resp": None},
             ],
             "then_data": {
                 "src": [],
@@ -124,7 +121,7 @@ def run_container(client, name, image, command, network, volumes, ports=None):
         volumes=volumes,
         ports=ports,
     )
-    pprint(container.attrs)
+    # pprint(container.attrs)
     return container
 
 
@@ -193,7 +190,7 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
         volumes={e2e_test_volume.name: DEFAULT_BIND_VOLUME},
         ports={"6379/tcp": REDIS_SRC_EXPECTED_PORT},
     )
-    async_print_container_log(redis_src_container)
+    async_print_container_log(redis_src_expected_container)
 
     redis_dst_expected_container = run_container(
         client=client,
@@ -206,7 +203,7 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
         volumes={e2e_test_volume.name: DEFAULT_BIND_VOLUME},
         ports={"6379/tcp": REDIS_DST_EXPECTED_PORT},
     )
-    async_print_container_log(redis_dst_container)
+    async_print_container_log(redis_dst_expected_container)
 
     print("Creating remiro container ...")
 
@@ -279,59 +276,56 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
 
     if "given_data" in tc_test:
         given_data = tc_test["given_data"]
-        redis_client_call_inbulk_then_save(redis_src_client, given_data["src"])
-        redis_client_call_inbulk_then_save(redis_dst_client, given_data["dst"])
+        redis_client_call_inbulk(redis_src_client, given_data["src"])
+        redis_client_call_inbulk(redis_dst_client, given_data["dst"])
+        redis_client_call(redis_src_client, "save", {})
+        redis_client_call(redis_dst_client, "save", {})
 
     if "then_data" in tc_test:
         then_data = tc_test["then_data"]
-        redis_client_call_inbulk_then_save(redis_src_expected_client, then_data["src"])
-        redis_client_call_inbulk_then_save(redis_dst_expected_client, then_data["dst"])
+        redis_client_call_inbulk(redis_src_expected_client, then_data["src"])
+        redis_client_call_inbulk(redis_dst_expected_client, then_data["dst"])
+        redis_client_call(redis_src_expected_client, "save", {})
+        redis_client_call(redis_dst_expected_client, "save", {})
     # ===
 
+    list_not_expected_resp = []
     if "when_req_then_resp" in tc_test:
         for when_req_then_resp in tc_test["when_req_then_resp"]:
             when_req_cmd, when_req_args = list(when_req_then_resp["req"].items())[0]
             then_resp = when_req_then_resp["resp"]
 
             got_resp = redis_client_call(remiro_client, when_req_cmd, when_req_args)
-            print(f"THEN_RESP={then_resp} GOT_RESP={got_resp}")
+
+            if got_resp != then_resp:
+                msg_err = f"WHEN_REQ_CMD={when_req_cmd} WHEN_REQ_ARGS={when_req_args} THEN_RESP={then_resp} GOT_RESP={got_resp}"
+                list_not_expected_resp.append(msg_err)
+
+    redis_client_call(redis_src_client, "save", {})
+    redis_client_call(redis_dst_client, "save", {})
 
     rdb_tools_container = run_container(
         client=client,
         name="rdb-tools-{}-{}".format(e2e_id, tc_id),
         image=rdb_tools_image.id,
-        command="""
+        command=f"""
         /bin/sh -c "
-        rdb --command diff /data/{} | sort > /data/{}.txt;
-        rdb --command diff /data/{} | sort > /data/{}.txt;
-        rdb --command diff /data/{} | sort > /data/{}.txt;
-        rdb --command diff /data/{} | sort > /data/{}.txt;
-        diff /data/{}.txt /data/{}.txt && diff /data/{}.txt /data/{}.txt;
+        rdb --command diff /data/{REDIS_SRC_DUMP} | sort > /data/{REDIS_SRC_DUMP}.txt;
+        rdb --command diff /data/{REDIS_DST_DUMP} | sort > /data/{REDIS_DST_DUMP}.txt;
+        rdb --command diff /data/{REDIS_SRC_EXPECTED_DUMP} | sort > /data/{REDIS_SRC_EXPECTED_DUMP}.txt;
+        rdb --command diff /data/{REDIS_DST_EXPECTED_DUMP} | sort > /data/{REDIS_DST_EXPECTED_DUMP}.txt;
+        diff /data/{REDIS_SRC_DUMP}.txt /data/{REDIS_SRC_EXPECTED_DUMP}.txt && diff /data/{REDIS_DST_DUMP}.txt /data/{REDIS_DST_EXPECTED_DUMP}.txt;
         echo $?
         "
-        """.format(
-            REDIS_SRC_DUMP,
-            REDIS_SRC_DUMP,
-            REDIS_DST_DUMP,
-            REDIS_DST_DUMP,
-            REDIS_SRC_EXPECTED_DUMP,
-            REDIS_SRC_EXPECTED_DUMP,
-            REDIS_DST_EXPECTED_DUMP,
-            REDIS_DST_EXPECTED_DUMP,
-            REDIS_SRC_DUMP,
-            REDIS_SRC_EXPECTED_DUMP,
-            REDIS_DST_DUMP,
-            REDIS_DST_EXPECTED_DUMP,
-        ),
+        """,
         network=e2e_test_network.name,
         volumes={e2e_test_volume.name: DEFAULT_BIND_VOLUME},
     )
 
-    last_cmd_status = str(
-        list(rdb_tools_container.logs(stream=True))[-1], "utf-8"
-    ).strip()
+    rdb_tools_container_log = list(rdb_tools_container.logs(stream=True))
+    last_cmd_status = str(rdb_tools_container_log[-1], "utf-8").strip()
 
-    is_expected = last_cmd_status == "0"
+    is_expected_cmd_status = last_cmd_status == "0"
 
     # === Delete containers, volume, network.
     e2e_test_volume_container.stop()
@@ -359,7 +353,19 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
     e2e_test_network.remove()
     e2e_test_volume.remove()
 
-    return is_expected
+    if list_not_expected_resp:
+        print("=== got_resp is not matched with then_resp ===")
+        for msg_err in list_not_expected_resp:
+            print(msg_err)
+
+    if not is_expected_cmd_status:
+        print(
+            "=== redis db comparison: (src vs src_expected) && (dst vs dst_expected) ==="
+        )
+        for log in rdb_tools_container_log:
+            print(log)
+
+    return (is_expected_cmd_status) or (not list_not_expected_resp)
 
 
 def redis_client_call(redis_client, command, args):
@@ -367,11 +373,10 @@ def redis_client_call(redis_client, command, args):
     cmd_func(**args)
 
 
-def redis_client_call_inbulk_then_save(redis_client, list_command):
+def redis_client_call_inbulk(redis_client, list_command):
     for cmd_n_args in list_command:
         for cmd, args in cmd_n_args.items():
             redis_client_call(redis_client, cmd, args)
-            redis_client_call(redis_client, "save", {})
 
 
 def main():
@@ -380,16 +385,9 @@ def main():
 
     client = docker.from_env()
 
-    print("VERSION: ", client.version())
-
     # Use api_client to 'docker cp' files from host to container
     api_client = docker.APIClient()
     print("API Client VERSION: ", api_client.version())
-
-    # pprint(vars(client.containers.list()))
-    for c in client.containers.list():
-        # pprint(vars(c.attrs))
-        pprint(c.attrs["Name"])
 
     print("Building 'redis-rdb-tools' image ...")
     rdb_tools_image, rdb_tools_log = client.images.build(
@@ -426,14 +424,6 @@ def main():
         else:
             print("Test FAILED: [{}] {}".format(tc["id"], tc["name"]))
             sys.exit(1)
-
-    # Remove images, network
-    # print("Removing images, network, volume ...")
-
-    # client.images.remove(image=rdb_tools_image.id)
-    # client.images.remove(image=remiro_image.id)
-
-    # print("VOLUME ID: {}".format(e2e_test_volume.id))
 
 
 if __name__ == "__main__":
