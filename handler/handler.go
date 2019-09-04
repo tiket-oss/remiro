@@ -246,15 +246,10 @@ func (r *redisHandler) HealthCheck(w http.ResponseWriter, req *http.Request) {
 		"sourceRedis":      buildRedisReport(srcErr),
 		"destinationRedis": buildRedisReport(dstErr),
 	}
-	rawBody, err := json.Marshal(body)
-	if err != nil {
-		log.Errorf("Failed to marshal response body: %v", err)
-	}
 
-	w.WriteHeader(status)
 	w.Header().Set("Content-Type", "application/json")
-	_, err = w.Write(rawBody)
-	if err != nil {
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(body); err != nil {
 		log.Error(err)
 	}
 }
