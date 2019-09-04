@@ -4,6 +4,7 @@ import tarfile
 import random
 import string
 import os
+import sys
 import threading
 import time
 from datetime import datetime
@@ -39,12 +40,33 @@ Addr = {dst_addr}
 
 test_cases = [
     {
-        "id": "1234",
-        "name": "",
+        "id": "001",
+        "name": """
+        [Given] a key is available in "destination" 
+        [When] a GET request for the key is received
+        [Then] GET and return the key value from "destination
+        """,
         "test": {
-            "given": {"src": [], "dst": []},
-            "when": [],
-            "then": {"src": [], "dst": []},
+            "given_data": {
+                "src": [
+                ],
+                "dst": [
+                    {"set": {"name": "foo", "value": "bar"}},
+                    {"set": {"name": "foo", "value": "bar"}},
+                ]},
+            "when_req": [
+
+            ],
+            "then_resp": [
+
+            ],
+            "then_data": {
+                "src": [
+
+                ],
+                "dst": [
+
+                ]},
         },
     }
 ]
@@ -324,6 +346,20 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
 
     return is_expected
 
+def redis_client_call_then_save(redis_client, command, args):
+    cmd_func = getattr(redis_client, command)
+    cmd_func(**args)
+    redis_client.save()
+
+
+def redis_client_call_in_bulk(redis_client, list_command):
+    for cmd_n_args in list_command:
+        for cmd,args in cmd_n_args.items():
+            redis_client_call_then_save(redis_client, cmd, args)
+
+            
+        
+
 
 if __name__ == "__main__":
 
@@ -371,6 +407,10 @@ if __name__ == "__main__":
             e2e_id=e2e_id,
             test_case=tc,
         )
+
+        if is_expected != True:
+            print("Test failed: [{}] {}".format(tc["id"], tc["name"]))
+            sys.exit(1)
 
     # Remove images, network
     # print("Removing images, network, volume ...")
