@@ -365,7 +365,7 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
         for log in rdb_tools_container_log:
             print(log)
 
-    return (is_expected_cmd_status) or (not list_not_expected_resp)
+    return (is_expected_cmd_status) and (not list_not_expected_resp)
 
 
 def redis_client_call(redis_client, command, args):
