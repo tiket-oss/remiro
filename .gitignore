@@ -4,5 +4,8 @@ remiro
 # Ignore local configuration file
 config.toml
 
-# E2E Testing stuff
+# Ignore test coverage reports
+coverage.txt
+
+# Ignore E2E Testing stuff
 test/e2e/remiro-e2e-env

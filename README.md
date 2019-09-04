@@ -1,5 +1,8 @@
 # Remiro
 
+[![Build Status](https://travis-ci.com/tiket-libre/remiro.svg?branch=master)](https://travis-ci.com/tiket-libre/remiro)
+[![codecov](https://codecov.io/gh/tiket-libre/remiro/branch/master/graph/badge.svg)](https://codecov.io/gh/tiket-libre/remiro)
+
 Remiro is a service that serves as a proxy in front of multiple Redis server.
 
 ## Rationale
@@ -22,6 +25,10 @@ Remiro can act as an intermediary for populating the new redis server over time 
 - We want to move **data to move** from **source** to **destination**, while ignoring the **data to keep**
 - *IMPORTANT*: The system that will request through Remiro is the one that *only* needs the **data to move**
 
+The assumption can be represented by the following diagram
+
+![System Context diagram](docs/diagrams/out/system_context.png)
+
 With the assumption in place, we can establish a mechanism in which Remiro will adhere to:
 
 - If retrieval request came through remiro:
@@ -41,6 +48,8 @@ With the assumption in place, we can establish a mechanism in which Remiro will 
   - (optional) Remiro will delete the data with the same key from **source**
 - If any other request came through remiro:
   - Simply proxy the request to the **destination**
+
+![Activity diagram](docs/diagrams/out/flow.png)
 
 ## How to use
 
@@ -67,6 +76,9 @@ DeleteOnSet = false
 # Redis address
 Addr = "redis-source:6379"
 
+# Password to use when connecting to Redis server
+Password = "foobared"
+
 # Connection pooling: determine how many maximum idle connections
 # to allow
 MaxIdleConns = 50
@@ -82,6 +94,9 @@ IdleTimeout = "30s"
 # Redis address
 Addr = "redis-destination:6379"
 
+# Password to use when connecting to Redis server
+Password = "foobared"
+
 # Connection pooling: determine how many maximum idle connections
 # to allow
 MaxIdleConns = 100
@@ -90,4 +105,37 @@ MaxIdleConns = 100
 # idle state before being closed. Format is based on golang ParseDuration
 # format: https://golang.org/pkg/time/#ParseDuration
 IdleTimeout = "45s"
+```
+
+## Instrumentation
+
+Remiro supports some instrumentation metrics that are useful to gauge redis usage:
+
+| Metrics                | Description                                                 | Unit  |
+| ---------------------- | ----------------------------------------------------------- | ----- |
+| remiro_command_count   | The count of outgoing request to supporting Redis instances | count |
+| remiro_request_latency | Time it took to serve a request through remiro              | ms    |
+
+The instrumentation is compatible with Prometheus only, and is accessible by scrapping the `/metrics` endpoint.
+
+To set specific port for instrumentation capability you can use the `-i` flag, otherwise it defaults to `:8888`
+
+```sh
+remiro -h 127.0.0.1 -p 6379 -c config.toml -i 9000
+```
+
+### Health check
+
+An endpoint for observing server health is available at `/health` endpoint. Aside from the standard "200 if server is healthy, 500 otherwise", it also returns a JSON response containing information of individual Redis server status:
+
+```json
+{
+  "destinationRedis": {
+    "status": "OK"
+  },
+  "sourceRedis": {
+    "status": "Error",
+    "error": "Error message sent from source redis"
+  }
+}
 ```

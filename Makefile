@@ -1,5 +1,5 @@
 TARGET = remiro
-PACKAGES := $(go list ./...)
+COVERAGE_REPORT = coverage.txt
 
 .PHONY: lint-prepare
 lint-prepare:
@@ -17,11 +17,11 @@ lint:
 
 .PHONY: test
 test:
-	@go test $(PACKAGES)
+	@go test -v -race -coverprofile=$(COVERAGE_REPORT) -covermode atomic ./...
 
 .PHONY: build
 build:
-	@go build -v -o $(TARGET) cmd/main.go
+	@go build -v -o $(TARGET)
 
 .PHONY: redis-up
 redis-up:

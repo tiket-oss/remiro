@@ -1,0 +1,28 @@
+before:
+  hooks:
+    - go mod download
+builds:
+- env:
+  - CGO_ENABLED=0
+  - GO111MODULE=on
+archives:
+- name_template: "{{ .ProjectName }}-{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  replacements:
+    darwin: Darwin
+    linux: Linux
+    windows: Windows
+    386: i386
+    amd64: x86_64
+  files:
+    - LICENSE
+    - README.md
+    - config.template.toml
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+snapshot:
+  name_template: "SNAPSHOT-{{.ShortCommit}}"
+release:
+  prerelease: auto
+  name_template: "{{ .ProjectName }}-{{ .Tag }}"
+changelog:
+  skip: true

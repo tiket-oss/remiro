@@ -1,0 +1,14 @@
+@startuml
+!include C4-PlantUML/C4_Container.puml
+
+System(client, "Client", "Any software system that utilizes Redis")
+System(remiro, "Remiro", "Handles Redis command and writes responses as if it was Redis")
+
+System_Ext(srcRedis, "Source Redis", "Legacy Redis that are used as the source to be replicated")
+System_Ext(dstRedis, "Destination Redis", "Redis that is projected to be used as the default")
+
+Rel(client, remiro, "Send Redis command", "RESP over TCP")
+Rel(remiro, srcRedis, "Send GET, SET, or DEL command", "RESP over TCP")
+Rel(remiro, dstRedis, "Relay Redis command from client", "RESP over TCP")
+
+@enduml

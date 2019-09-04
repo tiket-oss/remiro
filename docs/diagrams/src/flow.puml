@@ -1,0 +1,38 @@
+@startuml
+
+start
+
+:Command received;
+
+if (Is GET or SET?) then (yes)
+    if (What is it?) then (GET)
+        :GET from destination;
+        if (Exists?) then (yes)
+            :Return value to client;
+        else (no)
+            :GET from source;
+            if (Exists?) then (yes)
+                :Return value to client;
+                :Copy to destination;
+                if (Delete on GET?) then (true)
+                    :Delete the key\nfrom source;
+                else (false)
+                endif
+            else (no)
+                :Return nil;
+            endif
+        endif
+    else (SET)
+        :SET the key to destination;
+        if (Delete on SET?) then (true)
+            :Delete the key from source;
+        else (false)
+        endif
+    endif
+else (no)
+    :Proxy the request\nto Destination;
+endif
+
+stop
+
+@enduml
