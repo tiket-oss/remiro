@@ -6,6 +6,10 @@ DeleteOnGet = true
 # on successful SET command
 DeleteOnSet = false
 
+# If set, any connection to Remiro must be authenticated first
+# by matching the password in AUTH <password> command
+Password = "foobared"
+
 # Client configuration for "source" redis
 [Source]
 # Redis address
