@@ -58,8 +58,9 @@ TEST_CASES = [
                 ],
             },
             "when_req_then_resp": [
-                {"req": {"set": {"name": "foo", "value": "car"}}, "resp": None},
-                {"req": {"set": {"name": "foo", "value": "where1"}}, "resp": None},
+                {"req": {"set": {"name": "foo", "value": "car"}}, "resp": True},
+                {"req": {"set": {"name": "foo", "value": "where1"}}, "resp": True},
+                {"req": {"get": {"name": "foo"}}, "resp": b"where1"},
             ],
             "then_data": {
                 "src": [],
@@ -370,7 +371,7 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
 
 def redis_client_call(redis_client, command, args):
     cmd_func = getattr(redis_client, command)
-    cmd_func(**args)
+    return cmd_func(**args)
 
 
 def redis_client_call_inbulk(redis_client, list_command):
