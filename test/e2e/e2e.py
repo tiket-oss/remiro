@@ -111,6 +111,17 @@ def random_id():
     return "{:0>3}".format(random.randrange(999))
 
 
+def redis_client_call(redis_client, command, args):
+    cmd_func = getattr(redis_client, command)
+    return cmd_func(**args)
+
+
+def redis_client_call_inbulk(redis_client, list_command):
+    for cmd_n_args in list_command:
+        for cmd, args in cmd_n_args.items():
+            redis_client_call(redis_client, cmd, args)
+
+
 def run_container(client, name, image, command, network, volumes, ports=None):
     print("Creating container: {}".format(name))
     container = client.containers.run(
@@ -367,17 +378,6 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
             print(log)
 
     return (is_expected_cmd_status) and (not list_not_expected_resp)
-
-
-def redis_client_call(redis_client, command, args):
-    cmd_func = getattr(redis_client, command)
-    return cmd_func(**args)
-
-
-def redis_client_call_inbulk(redis_client, list_command):
-    for cmd_n_args in list_command:
-        for cmd, args in cmd_n_args.items():
-            redis_client_call(redis_client, cmd, args)
 
 
 def main():
