@@ -51,19 +51,9 @@ TEST_CASES = [
         """,
         "test": {
             # "given_config": {"delete_on_get": "true", "delete_on_set": "true"},
-            "given_data": {
-                "src": [],
-                "dst": [{"set": ("foo", "bar")}, {"set": ("roo", "car")}],
-            },
-            "when_req_then_resp": [
-                {"req": {"set": ("foo", "car")}, "resp": True},
-                {"req": {"set": ("foo", "where1")}, "resp": True},
-                {"req": {"GET": ("foo")}, "resp": b"where1"},
-            ],
-            "then_data": {
-                "src": [],
-                "dst": [{"set": ("foo", "where1")}, {"set": ("roo", "car")}],
-            },
+            "given_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
+            "when_req_then_resp": [{"req": {"get": ("foo")}, "resp": b"bar"}],
+            "then_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
         },
     }
 ]
