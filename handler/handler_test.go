@@ -586,6 +586,7 @@ func Test_redisHandler_HandlePING(t *testing.T) {
 }
 
 func Test_redisHandler_HandleAUTH(t *testing.T) {
+	handlerPass := "justapass"
 
 	t.Run(`[Given] a Password is set in configuration
 			[When] an AUTH command is received
@@ -594,7 +595,7 @@ func Test_redisHandler_HandleAUTH(t *testing.T) {
 			 [And] authenticate the connection`, func(t *testing.T) {
 
 		handler, _, _ := initHandlerMock()
-		handler.password = "justapass"
+		handler.password = handlerPass
 
 		var (
 			rawAuth = fmt.Sprintf("*2\r\n$4\r\nAUTH\r\n$%d\r\n%s\r\n", len(handler.password), handler.password)
@@ -640,7 +641,7 @@ func Test_redisHandler_HandleAUTH(t *testing.T) {
 			[Then] returns error stating invalid password`, func(t *testing.T) {
 
 		handler, _, _ := initHandlerMock()
-		handler.password = "justapass"
+		handler.password = handlerPass
 		passArgs := "wrongpass"
 
 		var (
@@ -729,7 +730,7 @@ func Test_redisHandler_HandleAUTH(t *testing.T) {
 		   [Then] returns error stating that the number of args is wrong`, func(t *testing.T) {
 
 		handler, _, _ := initHandlerMock()
-		handler.password = "justapass"
+		handler.password = handlerPass
 
 		rawAuth := fmt.Sprintf("*1\r\n$4\r\nAUTH\r\n")
 		rawErr := "-ERR wrong number of arguments for 'auth' command\r\n"
