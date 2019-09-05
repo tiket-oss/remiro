@@ -94,12 +94,10 @@ var (
 
 func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 	startTime := time.Now()
-
 	reqCtx, err := tag.New(context.Background())
 	if err != nil {
 		log.Warnf("Failed to initialize instrumentation: %v", err)
 	}
-
 	defer stats.Record(reqCtx, reqLatencyMs.M(sinceInMs(startTime)))
 
 	command := strings.ToUpper(string(cmd.Args[0]))

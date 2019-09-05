@@ -440,6 +440,8 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 			assert.True(t, dstSET.Called, "destination redis should be called")
 			assert.True(t, srcDEL.Called, "source redis DEL command should be called")
 		}()
+
+		waitForComplete(t, done, fatal)
 	})
 
 	t.Run(`[Given] deleteOnSet set to true
@@ -486,6 +488,8 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 			assert.True(t, dstSET.Called, "destination redis should be called")
 			assert.False(t, srcDEL.Called, "source redis DEL command should not be called")
 		}()
+
+		waitForComplete(t, done, fatal)
 	})
 }
 
@@ -530,6 +534,149 @@ func Test_redisHandler_HandlePING(t *testing.T) {
 
 			assert.Equal(t, rawPong, reply, "reply should be \"PONG\"")
 		}()
+
+		waitForComplete(t, done, fatal)
+	})
+}
+
+func Test_redisHandler_HandleAUTH(t *testing.T) {
+
+	t.Run(`[Given] a Password is set in configuration
+			[When] an AUTH command is received
+			 [And] the password argument matches with the one set in config
+			[Then] returns OK
+			 [And] authenticate the connection`, func(t *testing.T) {
+
+		handler, _, _ := initHandlerMock()
+		handler.password = "justapass"
+
+		var (
+			rawAuth = fmt.Sprintf("*2\r\n$4\r\nAUTH\r\n$%d\r\n%s\r\n", len(handler.password), handler.password)
+			rawOK   = "+OK\r\n"
+		)
+
+		fatal := make(chan error)
+		signal := make(chan error)
+		s := NewServer(":0", handler)
+		go func() {
+			defer s.Close()
+
+			if err := s.ListenServeAndSignal(signal); err != nil {
+				fatal <- err
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				fatal <- err
+			}
+
+			reply, err := doRequest(s.Addr().String(), rawAuth)
+			if err != nil {
+				fatal <- err
+			}
+
+			assert.Equal(t, rawOK, reply, "reply should be \"OK\"")
+		}()
+
+		waitForComplete(t, done, fatal)
+	})
+
+	t.Run(`[Given] a Password is set in configuration
+			[When] an AUTH command is received
+			 [And] the password argument doesn't match with the one set in config
+			[Then] returns error stating invalid password`, func(t *testing.T) {
+
+		handler, _, _ := initHandlerMock()
+		handler.password = "justapass"
+		passArgs := "wrongpass"
+
+		var (
+			rawAuth = fmt.Sprintf("*2\r\n$4\r\nAUTH\r\n$%d\r\n%s\r\n", len(passArgs), passArgs)
+			rawErr  = "-ERR invalid password\r\n"
+		)
+
+		fatal := make(chan error)
+		signal := make(chan error)
+		s := NewServer(":0", handler)
+		go func() {
+			defer s.Close()
+
+			if err := s.ListenServeAndSignal(signal); err != nil {
+				fatal <- err
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				fatal <- err
+			}
+
+			reply, err := doRequest(s.Addr().String(), rawAuth)
+			if err != nil {
+				fatal <- err
+			}
+
+			assert.Equal(t, rawErr, reply, "reply should be an \"Invalid password\" error")
+		}()
+
+		waitForComplete(t, done, fatal)
+	})
+
+	t.Run(`[Given] a password is not set in the configuration
+			[When] an AUTH command is received
+			[Then] returns error stating that password is not set`, func(t *testing.T) {
+
+		handler, _, _ := initHandlerMock()
+		handler.password = ""
+
+		passArgs := "nonexistent"
+		rawAuth := fmt.Sprintf("*2\r\n$4\r\nAUTH\r\n$%d\r\n%s\r\n", len(passArgs), passArgs)
+		rawErr := "-ERR Client sent AUTH, but no password is set\r\n"
+
+		fatal := make(chan error)
+		signal := make(chan error)
+		s := NewServer(":0", handler)
+		go func() {
+			defer s.Close()
+
+			if err := s.ListenServeAndSignal(signal); err != nil {
+				fatal <- err
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				fatal <- err
+			}
+
+			reply, err := doRequest(s.Addr().String(), rawAuth)
+			if err != nil {
+				fatal <- err
+			}
+
+			assert.Equal(t, rawErr, reply, "reply should be an \"No password set\" error")
+		}()
+
+		waitForComplete(t, done, fatal)
 	})
 }
 
