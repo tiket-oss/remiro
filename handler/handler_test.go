@@ -11,6 +11,52 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func Test_redisHandler(t *testing.T) {
+	t.Run(`[Given] a password is set in the configuration
+			[When] a non-AUTH command is received
+			 [And] the connection bearing the command is not authenticated
+			[Then] returns error stating the connection requires authentication`, func(t *testing.T) {
+
+		handler, _, _ := initHandlerMock()
+		handler.password = "justapass"
+
+		rawCmd := "*1\r\n$4\r\nPING\r\n"
+		rawErr := "-NOAUTH Authentication required.\r\n"
+
+		fatal := make(chan error)
+		signal := make(chan error)
+		s := NewServer(":0", handler)
+		go func() {
+			defer s.Close()
+
+			if err := s.ListenServeAndSignal(signal); err != nil {
+				fatal <- err
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				fatal <- err
+			}
+
+			reply, err := doRequest(s.Addr().String(), rawCmd)
+			if err != nil {
+				fatal <- err
+			}
+
+			assert.Equal(t, rawErr, reply, "reply should be a \"No Auth\" error")
+		}()
+
+		waitForComplete(t, done, fatal)
+	})
+}
+
 func Test_redisHandler_HandleGET(t *testing.T) {
 
 	var (
@@ -674,6 +720,48 @@ func Test_redisHandler_HandleAUTH(t *testing.T) {
 			}
 
 			assert.Equal(t, rawErr, reply, "reply should be an \"No password set\" error")
+		}()
+
+		waitForComplete(t, done, fatal)
+	})
+
+	t.Run(`[When] an incorrect AUTH command is received (wrong number of args)
+		   [Then] returns error stating that the number of args is wrong`, func(t *testing.T) {
+
+		handler, _, _ := initHandlerMock()
+		handler.password = "justapass"
+
+		rawAuth := fmt.Sprintf("*1\r\n$4\r\nAUTH\r\n")
+		rawErr := "-ERR wrong number of arguments for 'auth' command\r\n"
+
+		fatal := make(chan error)
+		signal := make(chan error)
+		s := NewServer(":0", handler)
+		go func() {
+			defer s.Close()
+
+			if err := s.ListenServeAndSignal(signal); err != nil {
+				fatal <- err
+			}
+		}()
+
+		done := make(chan bool)
+		go func() {
+			defer func() {
+				done <- true
+			}()
+
+			err := <-signal
+			if err != nil {
+				fatal <- err
+			}
+
+			reply, err := doRequest(s.Addr().String(), rawAuth)
+			if err != nil {
+				fatal <- err
+			}
+
+			assert.Equal(t, rawErr, reply, "reply should be an \"Wrong number of args\" error")
 		}()
 
 		waitForComplete(t, done, fatal)
