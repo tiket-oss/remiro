@@ -1,4 +1,5 @@
 import os
+import traceback
 import random
 import string
 import sys
@@ -52,22 +53,16 @@ TEST_CASES = [
             # "given_config": {"delete_on_get": "true", "delete_on_set": "true"},
             "given_data": {
                 "src": [],
-                "dst": [
-                    {"set": {"name": "foo", "value": "bar"}},
-                    {"set": {"name": "roo", "value": "car"}},
-                ],
+                "dst": [{"set": ("foo", "bar")}, {"set": ("roo", "car")}],
             },
             "when_req_then_resp": [
-                {"req": {"set": {"name": "foo", "value": "car"}}, "resp": True},
-                {"req": {"set": {"name": "foo", "value": "where1"}}, "resp": True},
-                {"req": {"get": {"name": "foo"}}, "resp": b"where1"},
+                {"req": {"set": ("foo", "car")}, "resp": True},
+                {"req": {"set": ("foo", "where1")}, "resp": True},
+                {"req": {"GET": ("foo")}, "resp": b"where1"},
             ],
             "then_data": {
                 "src": [],
-                "dst": [
-                    {"set": {"name": "foo", "value": "where1"}},
-                    {"set": {"name": "roo", "value": "car"}},
-                ],
+                "dst": [{"set": ("foo", "where1")}, {"set": ("roo", "car")}],
             },
         },
     }
@@ -112,13 +107,22 @@ def random_id():
 
 
 def redis_client_call(redis_client, command, args):
-    cmd_func = getattr(redis_client, command)
-    return cmd_func(**args)
+    # cmd_func = getattr(redis_client, command)
+    # return cmd_func(**args)
+
+    # expanded_args = (**args)
+    args_tupled = args
+    if not isinstance(args, tuple):
+        args_tupled = (args,)
+    print(f"### COMMAND: {command} ARGS: {args_tupled} LEN_ARGS: {len(args_tupled)}")
+
+    return redis_client.execute_command(command, *args_tupled)
 
 
 def redis_client_call_inbulk(redis_client, list_command):
     for cmd_n_args in list_command:
         for cmd, args in cmd_n_args.items():
+            print(">> CMD:{} ARGS:{}".format(cmd, args))
             redis_client_call(redis_client, cmd, args)
 
 
@@ -144,14 +148,16 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
 
     print("tc_id: {} test_name: {}".format(tc_id, test_case["name"]))
 
-    print("Creating 'e2e-T-network' ...")
+    print("Creating 'e2e-test-network' ...")
     e2e_test_network = client.networks.create(
-        "e2e-T-network-{}-{}".format(e2e_id, tc_id)
+        "e2e-test-network-{}-{}".format(e2e_id, tc_id)
     )
     pprint(e2e_test_network)
 
-    print("Creating 'e2e-T-volume' ...")
-    e2e_test_volume = client.volumes.create("e2e-T-volume-{}-{}".format(e2e_id, tc_id))
+    print("Creating 'e2e-test-volume' ...")
+    e2e_test_volume = client.volumes.create(
+        "e2e-test-volume-{}-{}".format(e2e_id, tc_id)
+    )
     pprint(e2e_test_volume.attrs)
 
     # === setup volume container: intermediary container to copy files from host to volume ===
@@ -190,7 +196,7 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
     )
     async_print_container_log(redis_dst_container)
 
-    # Redis Expected Containers
+    # === Redis Expected Containers ===
     redis_src_expected_container = run_container(
         client=client,
         name="redis-src-expected-{}-{}".format(e2e_id, tc_id),
@@ -285,85 +291,97 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
     )
     # ===
     print("=== populate given_data and then_data ===")
+    rdb_tools_container = None
+    rdb_tools_container_log = []
+    is_expected_cmd_status = False
+    try:
 
-    if "given_data" in tc_test:
-        given_data = tc_test["given_data"]
-        redis_client_call_inbulk(redis_src_client, given_data["src"])
-        redis_client_call_inbulk(redis_dst_client, given_data["dst"])
-        redis_client_call(redis_src_client, "save", {})
-        redis_client_call(redis_dst_client, "save", {})
+        if "given_data" in tc_test:
+            given_data = tc_test["given_data"]
+            redis_client_call_inbulk(redis_src_client, given_data["src"])
+            redis_client_call_inbulk(redis_dst_client, given_data["dst"])
+            # redis_client_call(redis_src_client, "save", ())
+            # redis_client_call(redis_dst_client, "save", ())
 
-    if "then_data" in tc_test:
-        then_data = tc_test["then_data"]
-        redis_client_call_inbulk(redis_src_expected_client, then_data["src"])
-        redis_client_call_inbulk(redis_dst_expected_client, then_data["dst"])
-        redis_client_call(redis_src_expected_client, "save", {})
-        redis_client_call(redis_dst_expected_client, "save", {})
-    # ===
+        if "then_data" in tc_test:
+            then_data = tc_test["then_data"]
+            redis_client_call_inbulk(redis_src_expected_client, then_data["src"])
+            redis_client_call_inbulk(redis_dst_expected_client, then_data["dst"])
+            # redis_client_call(redis_src_expected_client, "save", ())
+            # redis_client_call(redis_dst_expected_client, "save", ())
+        # ===
 
-    list_not_expected_resp = []
-    if "when_req_then_resp" in tc_test:
-        for when_req_then_resp in tc_test["when_req_then_resp"]:
-            when_req_cmd, when_req_args = list(when_req_then_resp["req"].items())[0]
-            then_resp = when_req_then_resp["resp"]
+        list_not_expected_resp = []
+        if "when_req_then_resp" in tc_test:
+            for when_req_then_resp in tc_test["when_req_then_resp"]:
+                when_req_cmd, when_req_args = list(when_req_then_resp["req"].items())[0]
+                then_resp = when_req_then_resp["resp"]
 
-            got_resp = redis_client_call(remiro_client, when_req_cmd, when_req_args)
+                got_resp = redis_client_call(remiro_client, when_req_cmd, when_req_args)
 
-            if got_resp != then_resp:
-                msg_err = f"WHEN_REQ_CMD={when_req_cmd} WHEN_REQ_ARGS={when_req_args} THEN_RESP={then_resp} GOT_RESP={got_resp}"
-                list_not_expected_resp.append(msg_err)
+                if got_resp != then_resp:
+                    msg_err = f"WHEN_REQ_CMD={when_req_cmd} WHEN_REQ_ARGS={when_req_args} THEN_RESP={then_resp} GOT_RESP={got_resp}"
+                    list_not_expected_resp.append(msg_err)
 
-    redis_client_call(redis_src_client, "save", {})
-    redis_client_call(redis_dst_client, "save", {})
+        redis_client_call(redis_src_client, "save", ())
+        redis_client_call(redis_dst_client, "save", ())
+        redis_client_call(redis_src_expected_client, "save", ())
+        redis_client_call(redis_dst_expected_client, "save", ())
 
-    rdb_tools_container = run_container(
-        client=client,
-        name="rdb-tools-{}-{}".format(e2e_id, tc_id),
-        image=rdb_tools_image.id,
-        command=f"""
-        /bin/sh -c "
-        rdb --command diff /data/{REDIS_SRC_DUMP} | sort > /data/{REDIS_SRC_DUMP}.txt;
-        rdb --command diff /data/{REDIS_DST_DUMP} | sort > /data/{REDIS_DST_DUMP}.txt;
-        rdb --command diff /data/{REDIS_SRC_EXPECTED_DUMP} | sort > /data/{REDIS_SRC_EXPECTED_DUMP}.txt;
-        rdb --command diff /data/{REDIS_DST_EXPECTED_DUMP} | sort > /data/{REDIS_DST_EXPECTED_DUMP}.txt;
-        diff /data/{REDIS_SRC_DUMP}.txt /data/{REDIS_SRC_EXPECTED_DUMP}.txt && diff /data/{REDIS_DST_DUMP}.txt /data/{REDIS_DST_EXPECTED_DUMP}.txt;
-        echo $?
-        "
-        """,
-        network=e2e_test_network.name,
-        volumes={e2e_test_volume.name: DEFAULT_BIND_VOLUME},
-    )
+        rdb_tools_container = run_container(
+            client=client,
+            name="rdb-tools-{}-{}".format(e2e_id, tc_id),
+            image=rdb_tools_image.id,
+            command=f"""
+            /bin/sh -c "
+            rdb --command diff /data/{REDIS_SRC_DUMP} | sort > /data/{REDIS_SRC_DUMP}.txt;
+            rdb --command diff /data/{REDIS_DST_DUMP} | sort > /data/{REDIS_DST_DUMP}.txt;
+            rdb --command diff /data/{REDIS_SRC_EXPECTED_DUMP} | sort > /data/{REDIS_SRC_EXPECTED_DUMP}.txt;
+            rdb --command diff /data/{REDIS_DST_EXPECTED_DUMP} | sort > /data/{REDIS_DST_EXPECTED_DUMP}.txt;
+            diff /data/{REDIS_SRC_DUMP}.txt /data/{REDIS_SRC_EXPECTED_DUMP}.txt && diff /data/{REDIS_DST_DUMP}.txt /data/{REDIS_DST_EXPECTED_DUMP}.txt;
+            echo $?
+            "
+            """,
+            network=e2e_test_network.name,
+            volumes={e2e_test_volume.name: DEFAULT_BIND_VOLUME},
+        )
 
-    rdb_tools_container_log = list(rdb_tools_container.logs(stream=True))
-    last_cmd_status = str(rdb_tools_container_log[-1], "utf-8").strip()
+        rdb_tools_container_log = list(rdb_tools_container.logs(stream=True))
+        last_cmd_status = str(rdb_tools_container_log[-1], "utf-8").strip()
 
-    is_expected_cmd_status = last_cmd_status == "0"
+        is_expected_cmd_status = last_cmd_status == "0"
+    except:
+        print(f"=== Exception when running a test: ===")
+        traceback.print_exc()
+        return False
 
-    # === Delete containers, volume, network.
-    e2e_test_volume_container.stop()
-    e2e_test_volume_container.remove()
+    finally:
+        # === Delete containers, volume, network.
+        e2e_test_volume_container.stop()
+        e2e_test_volume_container.remove()
 
-    rdb_tools_container.stop()
-    rdb_tools_container.remove()
+        if rdb_tools_container != None:
+            rdb_tools_container.stop()
+            rdb_tools_container.remove()
 
-    remiro_container.stop()
-    remiro_container.remove()
+        remiro_container.stop()
+        remiro_container.remove()
 
-    redis_src_container.stop()
-    redis_src_container.remove()
+        redis_src_container.stop()
+        redis_src_container.remove()
 
-    redis_dst_container.stop()
-    redis_dst_container.remove()
+        redis_dst_container.stop()
+        redis_dst_container.remove()
 
-    redis_src_expected_container.stop()
-    redis_src_expected_container.remove()
+        redis_src_expected_container.stop()
+        redis_src_expected_container.remove()
 
-    redis_dst_expected_container.stop()
-    redis_dst_expected_container.remove()
-    # ===
+        redis_dst_expected_container.stop()
+        redis_dst_expected_container.remove()
+        # ===
 
-    e2e_test_network.remove()
-    e2e_test_volume.remove()
+        e2e_test_network.remove()
+        e2e_test_volume.remove()
 
     if list_not_expected_resp:
         print("=== got_resp is not matched with then_resp ===")
@@ -381,7 +399,8 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
 
 
 def main():
-    e2e_id = "e2e{}".format(random_id())
+    # e2e_id = "e2e{}".format(random_id())
+    e2e_id = "e2e"
     print("e2e_id: {}".format(e2e_id))
 
     client = docker.from_env()
