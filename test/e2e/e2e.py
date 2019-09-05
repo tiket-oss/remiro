@@ -104,7 +104,7 @@ def redis_client_call(redis_client, command, args):
     args_tupled = args
     if not isinstance(args, tuple):
         args_tupled = (args,)
-    print(f"### COMMAND: {command} ARGS: {args_tupled} LEN_ARGS: {len(args_tupled)}")
+    # print(f"### COMMAND: {command} ARGS: {args_tupled} LEN_ARGS: {len(args_tupled)}")
 
     return redis_client.execute_command(command, *args_tupled)
 
@@ -112,7 +112,7 @@ def redis_client_call(redis_client, command, args):
 def redis_client_call_inbulk(redis_client, list_command):
     for cmd_n_args in list_command:
         for cmd, args in cmd_n_args.items():
-            print(">> CMD:{} ARGS:{}".format(cmd, args))
+            # print(">> CMD:{} ARGS:{}".format(cmd, args))
             redis_client_call(redis_client, cmd, args)
 
 
