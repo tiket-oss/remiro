@@ -9,3 +9,4 @@ coverage.txt
 
 # Ignore E2E Testing stuff
 test/e2e/remiro-e2e-env
+test/e2e/__pycache__

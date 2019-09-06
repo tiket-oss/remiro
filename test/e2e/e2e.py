@@ -8,10 +8,9 @@ import tempfile
 import threading
 import time
 from pprint import pprint
-
 import docker
 import redis
-
+from scenario import test_cases
 
 REDIS_VERSION = "redis:5.0.5"
 
@@ -40,23 +39,6 @@ Addr = {src_addr}
 [Destination]
 Addr = {dst_addr}
 """
-
-TEST_CASES = [
-    {
-        "id": "001",
-        "name": """
-        [Given] a key is available in "destination"
-        [When] a GET request for the key is received
-        [Then] GET and return the key value from "destination
-        """,
-        "test": {
-            # "given_config": {"delete_on_get": "true", "delete_on_set": "true"},
-            "given_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
-            "when_req_then_resp": [{"req": {"get": ("foo")}, "resp": b"bar"}],
-            "then_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
-        },
-    }
-]
 
 
 def simple_tar(path):
@@ -417,7 +399,7 @@ def main():
 
     # ==== Run a T ===
 
-    for tc in TEST_CASES:
+    for tc in test_cases:
 
         is_expected = run_test(
             client=client,
