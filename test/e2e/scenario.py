@@ -90,5 +90,19 @@ test_cases = [
             "when_req_then_resp": [{"req": {"set": ("foo", "bar")}, "resp": True}],
             "then_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
         },
+    },{
+        "id": "ut_HandleSET_003",
+        "name": """
+        [Given] deleteOnSet set to true
+        [When] a SET request for a key is received
+        [Then] SET the key with the value to "destination"
+            [And] DELETE the key from "source"
+        """,
+        "test": {
+            "given_config": {"delete_on_set": "true"},
+            "given_data": {"src": [{"set": ("foo", "bar")}], "dst": []},
+            "when_req_then_resp": [{"req": {"set": ("foo", "bar")}, "resp": True}],
+            "then_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
+        },
     }
 ]
