@@ -1,6 +1,6 @@
 test_cases = [
     {
-        "id": "ut001",
+        "id": "ut_HandleGET_001",
         "name": """
         [Given] a key is available in "destination"
         [When] a GET request for the key is received
@@ -14,7 +14,7 @@ test_cases = [
         },
     },
     {
-        "id": "ut002",
+        "id": "ut_HandleGET_002",
         "name": """
         [Given] a key is not available in "destination"
             [And] "destination" return non-nil error
@@ -28,7 +28,7 @@ test_cases = [
         },
     },
     {
-        "id": "ut004",
+        "id": "ut_HandleGET_004",
         "name": """
         [Given] a key is not available in "destination"
             [And] the key is available in "source"
@@ -48,7 +48,7 @@ test_cases = [
         },
     },
     {
-        "id": "ut005",
+        "id": "ut_HandleGET_005",
         "name": """
         [Given] a key is not available in "destination"
             [And] the key is available in "source"
