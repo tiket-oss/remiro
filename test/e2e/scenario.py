@@ -64,5 +64,18 @@ test_cases = [
             "when_req_then_resp": [{"req": {"get": ("foo")}, "resp": b"bar"}],
             "then_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
         },
-    },
+    },{
+        "id": "ut_HandleGET_006",
+        "name": """
+        [Given] a key is not available in "destination"
+            [And] the key is not available in "source"
+        [When] a GET request for the key is received
+        [Then] return nil rawMessage from "source"
+        """,
+        "test": {
+            "given_data": {"src": [], "dst": []},
+            "when_req_then_resp": [{"req": {"get": ("foo")}, "resp": None}],
+            "then_data": {"src": [], "dst": []},
+        },
+    }
 ]
