@@ -118,6 +118,7 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
     tc_id = test_case["id"]
     tc_test = test_case["test"]
 
+    print("=== Preparing a test ===")
     print("tc_id: {} test_name: {}".format(tc_id, test_case["name"]))
 
     print("Creating 'e2e-test-network' ...")
@@ -130,7 +131,7 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
     e2e_test_volume = client.volumes.create(
         "e2e-test-volume-{}-{}".format(e2e_id, tc_id)
     )
-    pprint(e2e_test_volume.attrs)
+    pprint(e2e_test_volume)
 
     # === setup volume container: intermediary container to copy files from host to volume ===
     client.images.pull("hello-world:latest")
@@ -197,9 +198,9 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
 
     print("Creating remiro container ...")
 
-    print("NETWORK:")
+    # print("NETWORK:")
     e2e_test_network.reload()
-    pprint(e2e_test_network.attrs)
+    # pprint(e2e_test_network.attrs)
 
     redis_src_ip = e2e_test_network.attrs["Containers"][redis_src_container.id][
         "IPv4Address"
@@ -217,7 +218,7 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
         src_addr='"{}:{}"'.format(redis_src_ip, 6379),
         dst_addr='"{}:{}"'.format(redis_dst_ip, 6379),
     )
-    print("remiro_config:")
+    print(f"{tc_id} remiro_config:")
     print(remiro_config)
 
     temp_dir = tempfile.TemporaryDirectory()
