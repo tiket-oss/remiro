@@ -277,13 +277,19 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
         if "when_req_then_resp" in tc_test:
             for when_req_then_resp in tc_test["when_req_then_resp"]:
                 when_req_cmd, when_req_args = list(when_req_then_resp["req"].items())[0]
-                then_resp = when_req_then_resp["resp"]
 
-                got_resp = redis_client_call(remiro_client, when_req_cmd, when_req_args)
+                try:
+                    got_resp = redis_client_call(remiro_client, when_req_cmd, when_req_args)
+                except redis.exceptions.ResponseError as ex:
+                    if "respError" in when_req_then_resp:
+                        if when_req_then_resp["respError"] != True: list_not_expected_resp.append(ex) 
+                    else: list_not_expected_resp.append(ex)
 
-                if got_resp != then_resp:
-                    msg_err = f"WHEN_REQ_CMD={when_req_cmd} WHEN_REQ_ARGS={when_req_args} THEN_RESP={then_resp} GOT_RESP={got_resp}"
-                    list_not_expected_resp.append(msg_err)
+                if "resp" in when_req_then_resp:
+                    then_resp = when_req_then_resp["resp"]
+                    if got_resp != then_resp:
+                        msg_err = f"WHEN_REQ_CMD={when_req_cmd} WHEN_REQ_ARGS={when_req_args} THEN_RESP={then_resp} GOT_RESP={got_resp}"
+                        list_not_expected_resp.append(msg_err)
 
         redis_client_call(redis_src_client, "save", ())
         redis_client_call(redis_dst_client, "save", ())
