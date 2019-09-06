@@ -115,5 +115,22 @@ test_cases = [
             "when_req_then_resp": [{"req": {"ping": ()}, "resp": True}],
             "then_data": {"src": [], "dst": []},
         },
+    },
+    # === HandleDefault ===
+    {
+        "id": "ut_HandleDefault",
+        "name": """
+        """,
+        "test": {
+            "given_data": {"src": [], "dst": []},
+            "when_req_then_resp": [
+                {"req": {"echo": ("Hello")}, "resp": b"Hello"},
+                {"req": {"hget": ("myhash", "field")}, "resp": None},
+                {"req": {"hset": ()}, "respError": True},
+                {"req": {"ttl": ("mykey")}, "resp": -2},
+                # {"req": {"command": ()}, "resp": ("GET", "SET")},
+            ],
+            "then_data": {"src": [], "dst": []},
+        },
     }
 ]
