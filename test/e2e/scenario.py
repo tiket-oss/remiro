@@ -104,5 +104,16 @@ test_cases = [
             "when_req_then_resp": [{"req": {"set": ("foo", "bar")}, "resp": True}],
             "then_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
         },
+    },
+    # === HandlePING ===
+    {
+        "id": "ut_HandlePING_001",
+        "name": """
+        """,
+        "test": {
+            "given_data": {"src": [], "dst": []},
+            "when_req_then_resp": [{"req": {"ping": ()}, "resp": True}],
+            "then_data": {"src": [], "dst": []},
+        },
     }
 ]
