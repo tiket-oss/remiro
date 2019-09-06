@@ -209,8 +209,8 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
     ][:-3]
 
     # === Copy Remiro Config File
-    given_config = tc_test.get("given_config", REMIRO_CONFIG_DEFAULT)
-    given_config.update(REMIRO_CONFIG_DEFAULT)
+    given_config = REMIRO_CONFIG_DEFAULT
+    given_config.update(tc_test.get("given_config", {}))
 
     remiro_config = REMIRO_CONFIG_TEMPLATE.format(
         **given_config,
