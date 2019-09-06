@@ -1,4 +1,5 @@
 test_cases = [
+    # === HandleGET ===
     {
         "id": "ut_HandleGET_001",
         "name": """
@@ -12,8 +13,7 @@ test_cases = [
             "when_req_then_resp": [{"req": {"get": ("foo")}, "resp": b"bar"}],
             "then_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
         },
-    },
-    {
+    }, {
         "id": "ut_HandleGET_002",
         "name": """
         [Given] a key is not available in "destination"
@@ -26,8 +26,7 @@ test_cases = [
             "when_req_then_resp": [{"req": {"get": ("foo")}, "resp": None}],
             "then_data": {"src": [], "dst": []},
         },
-    },
-    {
+    }, {
         "id": "ut_HandleGET_004",
         "name": """
         [Given] a key is not available in "destination"
@@ -46,8 +45,7 @@ test_cases = [
                 "dst": [{"set": ("foo", "bar")}],
             },
         },
-    },
-    {
+    }, {
         "id": "ut_HandleGET_005",
         "name": """
         [Given] a key is not available in "destination"
@@ -76,6 +74,21 @@ test_cases = [
             "given_data": {"src": [], "dst": []},
             "when_req_then_resp": [{"req": {"get": ("foo")}, "resp": None}],
             "then_data": {"src": [], "dst": []},
+        },
+    },
+    # === HandleSET ===
+    {
+        "id": "ut_HandleSET_001",
+        "name": """
+        [Given] deleteOnSet set to false
+        [When] a SET request for a key is received
+        [Then] SET the key with the value to "destination"
+        """,
+        "test": {
+            "given_config": {"delete_on_set": "false"},
+            "given_data": {"src": [], "dst": []},
+            "when_req_then_resp": [{"req": {"set": ("foo", "bar")}, "resp": True}],
+            "then_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
         },
     }
 ]
