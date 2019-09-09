@@ -1,15 +1,29 @@
-language: go
+services:
+  - docker
 
-go:
-  - 1.12.x
+matrix:
+  include:
+    - language: go
 
-env:
-  - GO111MODULE=on
+      go:
+        - 1.12.x
 
-script:
-  - make lint-prepare
-  - make lint
-  - make test
+      env:
+        - GO111MODULE=on
 
-after_success:
-  - bash <(curl -s https://codecov.io/bash)
+      script:
+        - make lint-prepare
+        - make lint
+        - make test
+
+      after_success:
+        - bash <(curl -s https://codecov.io/bash)
+
+    - language: python
+
+      python:
+        - "3.6"
+
+      script:
+        - cd test/e2e
+        - make e2e-test
