@@ -1,4 +1,19 @@
 test_cases = [
+    {
+        "id": "ut_HandleNonAUTHCmd_001",
+        "name": """
+        [Given] a password is set in the configuration
+		[When] a non-AUTH command is received
+            [And] the connection bearing the command is not authenticated
+        [Then] returns error stating the connection requires authentication
+        """,
+        "test": {
+            "given_config": {"password": '"justapass"'},
+            "given_data": {"src": [], "dst": []},
+            "when_req_then_resp": [{"req": {"get": ("foo")}, "respError": True}],
+            "then_data": {"src": [], "dst": []},
+        },
+    },
     # === HandleGET ===
     {
         "id": "ut_HandleGET_001",
@@ -13,7 +28,8 @@ test_cases = [
             "when_req_then_resp": [{"req": {"get": ("foo")}, "resp": b"bar"}],
             "then_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
         },
-    }, {
+    },
+    {
         "id": "ut_HandleGET_002",
         "name": """
         [Given] a key is not available in "destination"
@@ -26,7 +42,8 @@ test_cases = [
             "when_req_then_resp": [{"req": {"get": ("foo")}, "resp": None}],
             "then_data": {"src": [], "dst": []},
         },
-    }, {
+    },
+    {
         "id": "ut_HandleGET_004",
         "name": """
         [Given] a key is not available in "destination"
@@ -45,7 +62,8 @@ test_cases = [
                 "dst": [{"set": ("foo", "bar")}],
             },
         },
-    }, {
+    },
+    {
         "id": "ut_HandleGET_005",
         "name": """
         [Given] a key is not available in "destination"
@@ -62,7 +80,8 @@ test_cases = [
             "when_req_then_resp": [{"req": {"get": ("foo")}, "resp": b"bar"}],
             "then_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
         },
-    },{
+    },
+    {
         "id": "ut_HandleGET_006",
         "name": """
         [Given] a key is not available in "destination"
@@ -90,7 +109,8 @@ test_cases = [
             "when_req_then_resp": [{"req": {"set": ("foo", "bar")}, "resp": True}],
             "then_data": {"src": [], "dst": [{"set": ("foo", "bar")}]},
         },
-    },{
+    },
+    {
         "id": "ut_HandleSET_003",
         "name": """
         [Given] deleteOnSet set to true
@@ -132,5 +152,65 @@ test_cases = [
             ],
             "then_data": {"src": [], "dst": []},
         },
-    }
+    },
+    # === HandleAUTH ===
+    {
+        "id": "ut_HandleAUTH_001",
+        "name": """
+        [Given] a Password is set in configuration
+        [When] an AUTH command is received
+            [And] the password argument matches with the one set in config
+        [Then] returns OK
+            [And] authenticate the connection
+        """,
+        "test": {
+            "given_config": {"password": '"justapass"'},
+            "given_data": {"src": [], "dst": []},
+            "when_req_then_resp": [{"req": {"auth": ("justapass")}, "resp": True}],
+            "then_data": {"src": [], "dst": []},
+        },
+    },
+    {
+        "id": "ut_HandleAUTH_002",
+        "name": """
+        [Given] a Password is set in configuration
+        [When] an AUTH command is received
+            [And] the password argument doesn't match with the one set in config
+        [Then] returns error stating invalid password
+        """,
+        "test": {
+            "given_config": {"password": '"justapass"'},
+            "given_data": {"src": [], "dst": []},
+            "when_req_then_resp": [{"req": {"auth": ("wrongpass")}, "respError": True}],
+            "then_data": {"src": [], "dst": []},
+        },
+    },
+    {
+        "id": "ut_HandleAUTH_003",
+        "name": """
+        [Given] a password is not set in the configuration
+        [When] an AUTH command is received
+        [Then] returns error stating that password is not set
+        """,
+        "test": {
+            "given_data": {"src": [], "dst": []},
+            "when_req_then_resp": [
+                {"req": {"auth": ("nonexistent")}, "respError": True}
+            ],
+            "then_data": {"src": [], "dst": []},
+        },
+    },
+    {
+        "id": "ut_HandleAUTH_004",
+        "name": """
+        [When] an incorrect AUTH command is received (wrong number of args)
+        [Then] returns error stating that the number of args is wrong
+        """,
+        "test": {
+            "given_config": {"password": '"justapass"'},
+            "given_data": {"src": [], "dst": []},
+            "when_req_then_resp": [{"req": {"auth": ()}, "respError": True}],
+            "then_data": {"src": [], "dst": []},
+        },
+    },
 ]
