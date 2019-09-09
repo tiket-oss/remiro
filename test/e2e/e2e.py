@@ -29,16 +29,25 @@ REDIS_DST_EXPECTED_DUMP = "redis_dst_expected_dump.rdb"
 DEFAULT_BIND_PATH = "/data"
 DEFAULT_BIND_VOLUME = {"bind": DEFAULT_BIND_PATH, "mode": "rw"}
 
-REMIRO_CONFIG_DEFAULT = {"delete_on_get": "true", "delete_on_set": "false"}
+REMIRO_CONFIG_DEFAULT = {
+    "delete_on_get": "true",
+    "delete_on_set": "false",
+    "password": '""',
+    "src_password": '""',
+    "dst_password": '""',
+}
 REMIRO_CONFIG_TEMPLATE = """
 DeleteOnGet = {delete_on_get}
 DeleteOnSet = {delete_on_set}
+Password = {password}
 
 [Source]
 Addr = {src_addr}
+Password = {src_password}
 
 [Destination]
 Addr = {dst_addr}
+Password = {dst_password}
 """
 
 
@@ -279,12 +288,20 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
             for when_req_then_resp in tc_test["when_req_then_resp"]:
                 when_req_cmd, when_req_args = list(when_req_then_resp["req"].items())[0]
 
+                got_resp = None
                 try:
-                    got_resp = redis_client_call(remiro_client, when_req_cmd, when_req_args)
-                except redis.exceptions.ResponseError as ex:
+                    got_resp = redis_client_call(
+                        remiro_client, when_req_cmd, when_req_args
+                    )
+                except (
+                    redis.exceptions.ResponseError,
+                    redis.exceptions.AuthenticationError,
+                ) as ex:
                     if "respError" in when_req_then_resp:
-                        if when_req_then_resp["respError"] != True: list_not_expected_resp.append(ex) 
-                    else: list_not_expected_resp.append(ex)
+                        if when_req_then_resp["respError"] != True:
+                            list_not_expected_resp.append(ex)
+                    else:
+                        list_not_expected_resp.append(ex)
 
                 if "resp" in when_req_then_resp:
                     then_resp = when_req_then_resp["resp"]
