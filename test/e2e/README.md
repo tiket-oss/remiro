@@ -18,5 +18,23 @@ then, `e2e.py` does following tasks while running a test case :
 - run a test to `remiro` by using Redis Python client [redis-py](https://github.com/andymccurdy/redis-py)
 - run `SAVE` command for each Redis server containers to get Redis data dump files: `dump-redis-src.rdb`, `dump-redis-dst.rdb`, `dump-redis-src-expected.rdb`, `dump-redis-dst-expected.rdb`
 - by using `redis-rdb-tools`, compare:
-    1) `dump-redis-src.rdb` & `dump-redis-src-expected.rdb`
-    2) `dump-redis-dst.rdb` & `dump-redis-dst-expected.rdb`
+  1. `dump-redis-src.rdb` & `dump-redis-src-expected.rdb`
+  2. `dump-redis-dst.rdb` & `dump-redis-dst-expected.rdb`
+
+## Test Case Scenario
+
+Each test case is defined in `scenario.py` with the following format:
+
+- `id`: (required) id of the test case
+- `name`: (required) name / description of the test case
+- `test`
+  - `given_data`: (required)
+    - `src`: list of Redis commands to populate initial data in `redis-src` server
+    - `dst`: list of Redis commands to populate initial data in `redis-dst` server
+  - `when_req_then_data`: list of Redis request commands and its expected responses
+    - `req`: a Redis command with its arguments. It consists of `"<redis_cmd>": ("<arg1>", "<arg2>", "<etc>")`
+    - `resp`: (optional) expected response
+    - `respError`: (optional) `True`: if an exception is expected
+  - `then_data`: (required)
+    - `src`: list of Redis commands to populate expected data in `redis-src-expected` server
+    - `dst`: list of Redis commands to populate expected data in `redis-dst-expected` server
