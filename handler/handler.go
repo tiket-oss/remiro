@@ -77,27 +77,35 @@ func RunInstrumentation(addr string, handler Handler, errSignal chan error) erro
 
 // redisHandler is an implementation of Handler
 type redisHandler struct {
-	sourcePool      *redis.Pool
-	destinationPool *redis.Pool
-	deleteOnGet     bool
-	deleteOnSet     bool
-	deletedKey      map[string]bool
+	sourcePool        *redis.Pool
+	destinationPool   *redis.Pool
+	deleteOnGet       bool
+	deleteOnSet       bool
+	deletedKey        map[string]bool
+	authenticatedAddr map[string]bool
+	password          string
 	sync.Mutex
 }
 
-var replyTypeBytes = []byte{'+', '-', ':', '$', '*'}
+var (
+	replyTypeBytes = []byte{'+', '-', ':', '$', '*'}
+	errAuthMsg     = "NOAUTH Authentication required."
+)
 
 func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 	startTime := time.Now()
-
 	reqCtx, err := tag.New(context.Background())
 	if err != nil {
 		log.Warnf("Failed to initialize instrumentation: %v", err)
 	}
-
 	defer stats.Record(reqCtx, reqLatencyMs.M(sinceInMs(startTime)))
 
 	command := strings.ToUpper(string(cmd.Args[0]))
+	if command != "AUTH" && !r.authorizedConn(conn) {
+		conn.WriteError(errAuthMsg)
+		return
+	}
+
 	switch command {
 	case "GET":
 		args := make([]interface{}, 0)
@@ -187,6 +195,30 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 	case "PING":
 		conn.WriteString("PONG")
 
+	case "AUTH":
+		if len(cmd.Args) != 2 {
+			conn.WriteError("ERR wrong number of arguments for 'auth' command")
+			return
+		}
+
+		if r.password == "" {
+			conn.WriteError("ERR Client sent AUTH, but no password is set")
+			return
+		}
+
+		var authenticated bool
+		pass := string(cmd.Args[1])
+		if pass == r.password {
+			authenticated = true
+			conn.WriteString("OK")
+		} else {
+			conn.WriteError("ERR invalid password")
+		}
+
+		r.Lock()
+		r.authenticatedAddr[conn.RemoteAddr()] = authenticated
+		r.Unlock()
+
 	default:
 		args := make([]interface{}, 0)
 		if len(cmd.Args) > 1 {
@@ -209,11 +241,16 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 }
 
 func (r *redisHandler) Accept(conn redcon.Conn) bool {
+	log.Infof("Accepting connection from %s", conn.RemoteAddr())
 	return true
 }
 
 func (r *redisHandler) Closed(conn redcon.Conn, err error) {
+	log.Infof("Connection from %s has been closed", conn.RemoteAddr())
 
+	r.Lock()
+	r.authenticatedAddr[conn.RemoteAddr()] = false
+	r.Unlock()
 }
 
 func (r *redisHandler) HealthCheck(w http.ResponseWriter, req *http.Request) {
@@ -254,6 +291,13 @@ func (r *redisHandler) HealthCheck(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (r *redisHandler) authorizedConn(conn redcon.Conn) bool {
+	if r.password == "" {
+		return true
+	}
+	return r.authenticatedAddr[conn.RemoteAddr()]
+}
+
 type duration struct {
 	time.Duration
 }
@@ -274,6 +318,7 @@ type ClientConfig struct {
 
 // RedisConfig holds configuration for initializing redisHandler
 type RedisConfig struct {
+	Password    string
 	DeleteOnGet bool
 	DeleteOnSet bool
 	Source      ClientConfig
@@ -284,11 +329,13 @@ type RedisConfig struct {
 // handler that handler redis-like interface
 func NewRedisHandler(config RedisConfig) Handler {
 	return &redisHandler{
-		sourcePool:      newRedisPool(config.Source),
-		destinationPool: newRedisPool(config.Destination),
-		deleteOnGet:     config.DeleteOnGet,
-		deleteOnSet:     config.DeleteOnSet,
-		deletedKey:      make(map[string]bool),
+		sourcePool:        newRedisPool(config.Source),
+		destinationPool:   newRedisPool(config.Destination),
+		deleteOnGet:       config.DeleteOnGet,
+		deleteOnSet:       config.DeleteOnSet,
+		deletedKey:        make(map[string]bool),
+		authenticatedAddr: make(map[string]bool),
+		password:          config.Password,
 	}
 }
 
