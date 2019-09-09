@@ -301,7 +301,9 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
                         if when_req_then_resp["respError"] != True:
                             list_not_expected_resp.append(ex)
                     else:
-                        list_not_expected_resp.append(ex)
+                        list_not_expected_resp.append(
+                            f'{ex}. Hint: set "respError": True'
+                        )
 
                 if "resp" in when_req_then_resp:
                     then_resp = when_req_then_resp["resp"]
