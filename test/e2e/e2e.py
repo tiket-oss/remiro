@@ -89,14 +89,9 @@ def random_id():
 
 
 def redis_client_call(redis_client, command, args):
-    # cmd_func = getattr(redis_client, command)
-    # return cmd_func(**args)
-
-    # expanded_args = (**args)
     args_tupled = args
     if not isinstance(args, tuple):
         args_tupled = (args,)
-    # print(f"### COMMAND: {command} ARGS: {args_tupled} LEN_ARGS: {len(args_tupled)}")
 
     return redis_client.execute_command(command, *args_tupled)
 
@@ -104,7 +99,6 @@ def redis_client_call(redis_client, command, args):
 def redis_client_call_inbulk(redis_client, list_command):
     for cmd_n_args in list_command:
         for cmd, args in cmd_n_args.items():
-            # print(">> CMD:{} ARGS:{}".format(cmd, args))
             redis_client_call(redis_client, cmd, args)
 
 
@@ -272,15 +266,11 @@ def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_cas
             given_data = tc_test["given_data"]
             redis_client_call_inbulk(redis_src_client, given_data["src"])
             redis_client_call_inbulk(redis_dst_client, given_data["dst"])
-            # redis_client_call(redis_src_client, "save", ())
-            # redis_client_call(redis_dst_client, "save", ())
 
         if "then_data" in tc_test:
             then_data = tc_test["then_data"]
             redis_client_call_inbulk(redis_src_expected_client, then_data["src"])
             redis_client_call_inbulk(redis_dst_expected_client, then_data["dst"])
-            # redis_client_call(redis_src_expected_client, "save", ())
-            # redis_client_call(redis_dst_expected_client, "save", ())
         # ===
 
         list_not_expected_resp = []
@@ -413,7 +403,7 @@ def main():
         print(log)
     pprint(remiro_image)
 
-    # ==== Run a T ===
+    # ==== Run a Test Case ===
 
     for tc in test_cases:
 
