@@ -195,6 +195,10 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 	case "PING":
 		conn.WriteString("PONG")
 
+	case "QUIT":
+		conn.WriteString("OK")
+		conn.Close()
+
 	case "AUTH":
 		if len(cmd.Args) != 2 {
 			conn.WriteError("ERR wrong number of arguments for 'auth' command")
