@@ -89,6 +89,7 @@ type redisHandler struct {
 
 var (
 	replyTypeBytes = []byte{'+', '-', ':', '$', '*'}
+	noAuthCmd      = []string{"AUTH", "QUIT"}
 	errAuthMsg     = "NOAUTH Authentication required."
 )
 
@@ -101,7 +102,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 	defer stats.Record(reqCtx, reqLatencyMs.M(sinceInMs(startTime)))
 
 	command := strings.ToUpper(string(cmd.Args[0]))
-	if command != "AUTH" && !r.authorizedConn(conn) {
+	if !r.authorizedConn(conn, command) {
 		conn.WriteError(errAuthMsg)
 		return
 	}
@@ -295,9 +296,14 @@ func (r *redisHandler) HealthCheck(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *redisHandler) authorizedConn(conn redcon.Conn) bool {
+func (r *redisHandler) authorizedConn(conn redcon.Conn, cmd string) bool {
 	if r.password == "" {
 		return true
+	}
+	for _, allowedCmd := range noAuthCmd {
+		if cmd == allowedCmd {
+			return true
+		}
 	}
 	return r.authenticatedAddr[conn.RemoteAddr()]
 }
