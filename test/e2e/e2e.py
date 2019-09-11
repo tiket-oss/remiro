@@ -51,7 +51,7 @@ Password = {dst_password}
 """
 
 
-def simple_tar(path):
+def create_tar_file(path):
     f = tempfile.NamedTemporaryFile()
     t = tarfile.open(mode="w", fileobj=f)
 
@@ -117,263 +117,316 @@ def run_container(client, name, image, command, network, volumes, ports=None):
     return container
 
 
-def run_test(client, api_client, remiro_image, rdb_tools_image, e2e_id, test_case):
-    # tc_id = "tid{}".format(random_id())
-    tc_id = test_case["id"]
-    tc_test = test_case["test"]
+class TestCase:
+    def __init__(
+        self, client, api_client, remiro_image, rdb_tools_image, e2e_id, test_case
+    ):
+        self.client = client
+        self.api_client = api_client
+        self.remiro_image = remiro_image
+        self.rdb_tools_image = rdb_tools_image
+        self.e2e_id = e2e_id
+        self.test_case = test_case
 
-    print("=== Preparing a test ===")
-    print(f"tc_id: {tc_id} test_name: {test_case['name']}")
+        self.setup_network_volume()
 
-    print("Creating 'e2e-test-network' ...")
-    e2e_test_network = client.networks.create(f"e2e-test-network-{e2e_id}-{tc_id}")
-    pprint(e2e_test_network)
+    def setup_network_volume(self):
+        e2e_id = self.e2e_id
+        # tc_id = "tid{}".format(random_id())
+        tc_id = self.test_case["id"]
+        tc_test = self.test_case["test"]
 
-    print("Creating 'e2e-test-volume' ...")
-    e2e_test_volume = client.volumes.create(f"e2e-test-volume-{e2e_id}-{tc_id}")
-    pprint(e2e_test_volume)
+        print("=== Preparing a test ===")
+        print(f"tc_id: {tc_id} test_name: {self.test_case['name']}")
 
-    # === setup volume container: intermediary container to copy files from host to volume ===
-    client.images.pull("hello-world:latest")
-    e2e_test_volume_container = client.containers.create(
-        name=f"e2e-T-volume-container-{e2e_id}-{tc_id}",
-        image="hello-world",
-        volumes={e2e_test_volume.name: DEFAULT_BIND_VOLUME},
-    )
-    # ===
-    print("Creating containers ...")
+        print("Creating 'e2e-test-network' ...")
+        e2e_test_network = self.client.networks.create(
+            f"e2e-test-network-{e2e_id}-{tc_id}"
+        )
+        pprint(e2e_test_network)
 
-    redis_src_container = run_container(
-        client=client,
-        name=f"redis-src-{e2e_id}-{tc_id}",
-        image=REDIS_VERSION,
-        command=f"redis-server --dir {DEFAULT_BIND_PATH} --dbfilename {REDIS_SRC_DUMP}",
-        network=e2e_test_network.name,
-        volumes={e2e_test_volume.name: DEFAULT_BIND_VOLUME},
-        ports={"6379/tcp": REDIS_SRC_PORT},
-    )
-    async_print_container_log(redis_src_container)
+        print("Creating 'e2e-test-volume' ...")
+        e2e_test_volume = self.client.volumes.create(
+            f"e2e-test-volume-{e2e_id}-{tc_id}"
+        )
+        pprint(e2e_test_volume)
 
-    redis_dst_container = run_container(
-        client=client,
-        name=f"redis-dst-{e2e_id}-{tc_id}",
-        image=REDIS_VERSION,
-        command=f"redis-server --dir {DEFAULT_BIND_PATH} --dbfilename {REDIS_DST_DUMP}",
-        network=e2e_test_network.name,
-        volumes={e2e_test_volume.name: DEFAULT_BIND_VOLUME},
-        ports={"6379/tcp": REDIS_DST_PORT},
-    )
-    async_print_container_log(redis_dst_container)
-
-    # === Redis Expected Containers ===
-    redis_src_expected_container = run_container(
-        client=client,
-        name=f"redis-src-expected-{e2e_id}-{tc_id}",
-        image=REDIS_VERSION,
-        command=f"redis-server --dir {DEFAULT_BIND_PATH} --dbfilename {REDIS_SRC_EXPECTED_DUMP}",
-        network=e2e_test_network.name,
-        volumes={e2e_test_volume.name: DEFAULT_BIND_VOLUME},
-        ports={"6379/tcp": REDIS_SRC_EXPECTED_PORT},
-    )
-    async_print_container_log(redis_src_expected_container)
-
-    redis_dst_expected_container = run_container(
-        client=client,
-        name=f"redis-dst-expected-{e2e_id}-{tc_id}",
-        image=REDIS_VERSION,
-        command=f"redis-server --dir {DEFAULT_BIND_PATH} --dbfilename {REDIS_DST_EXPECTED_DUMP}",
-        network=e2e_test_network.name,
-        volumes={e2e_test_volume.name: DEFAULT_BIND_VOLUME},
-        ports={"6379/tcp": REDIS_DST_EXPECTED_PORT},
-    )
-    async_print_container_log(redis_dst_expected_container)
-
-    print("Creating remiro container ...")
-
-    # print("NETWORK:")
-    e2e_test_network.reload()
-    # pprint(e2e_test_network.attrs)
-
-    redis_src_ip = e2e_test_network.attrs["Containers"][redis_src_container.id][
-        "IPv4Address"
-    ][:-3]
-    redis_dst_ip = e2e_test_network.attrs["Containers"][redis_dst_container.id][
-        "IPv4Address"
-    ][:-3]
-
-    # === Copy Remiro Config File
-    given_config = copy.deepcopy(REMIRO_CONFIG_DEFAULT)
-    given_config.update(tc_test.get("given_config", {}))
-
-    remiro_config = REMIRO_CONFIG_TEMPLATE.format(
-        **given_config,
-        src_addr=f'"{redis_src_ip}:{6379}"',
-        dst_addr=f'"{redis_dst_ip}:{6379}"',
-    )
-    print(f"{tc_id} remiro_config:")
-    print(remiro_config)
-
-    temp_dir = tempfile.TemporaryDirectory()
-    remiro_config_file = open(os.path.join(temp_dir.name, "config.toml"), mode="w+")
-    try:
-        remiro_config_file.writelines(remiro_config)
-    finally:
-        remiro_config_file.close()
-    print("remiro_config_file: ", remiro_config_file.name)
-
-    status_put_archive = api_client.put_archive(
-        e2e_test_volume_container.name,
-        DEFAULT_BIND_PATH,
-        simple_tar(remiro_config_file.name),
-    )
-    print(f"STATUS PUT_ARCHIVE: {status_put_archive}")
-
-    # ===
-
-    remiro_config_path = f"{DEFAULT_BIND_PATH}/config.toml"
-
-    remiro_container = run_container(
-        client=client,
-        name=f"remiro-{e2e_id}-{tc_id}",
-        image=remiro_image.id,
-        command=f"-h 0.0.0.0 -p {REMIRO_PORT} -c {remiro_config_path}",
-        network=e2e_test_network.name,
-        volumes={e2e_test_volume.name: DEFAULT_BIND_VOLUME},
-        ports={f"{REMIRO_PORT}/tcp": REMIRO_PORT},
-    )
-    async_print_container_log(remiro_container)
-
-    print("=== init redis client ===")
-
-    remiro_client = redis.Redis(host="127.0.0.1", port=REMIRO_PORT)
-    redis_src_client = redis.Redis(host="127.0.0.1", port=REDIS_SRC_PORT)
-    redis_dst_client = redis.Redis(host="127.0.0.1", port=REDIS_DST_PORT)
-    redis_src_expected_client = redis.Redis(
-        host="127.0.0.1", port=REDIS_SRC_EXPECTED_PORT
-    )
-
-    redis_dst_expected_client = redis.Redis(
-        host="127.0.0.1", port=REDIS_DST_EXPECTED_PORT
-    )
-    # ===
-    print("=== populate given_data and then_data ===")
-    rdb_tools_container = None
-    rdb_tools_container_log = []
-    is_expected_cmd_status = False
-    try:
-
-        if "given_data" in tc_test:
-            given_data = tc_test["given_data"]
-            redis_client_call_inbulk(redis_src_client, given_data["src"])
-            redis_client_call_inbulk(redis_dst_client, given_data["dst"])
-
-        if "then_data" in tc_test:
-            then_data = tc_test["then_data"]
-            redis_client_call_inbulk(redis_src_expected_client, then_data["src"])
-            redis_client_call_inbulk(redis_dst_expected_client, then_data["dst"])
-        # ===
-
-        list_not_expected_resp = []
-        if "when_req_then_resp" in tc_test:
-            for when_req_then_resp in tc_test["when_req_then_resp"]:
-                when_req_cmd, when_req_args = list(when_req_then_resp["req"].items())[0]
-
-                got_resp = None
-                try:
-                    got_resp = redis_client_call(
-                        remiro_client, when_req_cmd, when_req_args
-                    )
-                except (
-                    redis.exceptions.ResponseError,
-                    redis.exceptions.AuthenticationError,
-                ) as ex:
-                    if "respError" in when_req_then_resp:
-                        if when_req_then_resp["respError"] != True:
-                            list_not_expected_resp.append(ex)
-                    else:
-                        list_not_expected_resp.append(
-                            f'{ex}. Hint: set "respError": True'
-                        )
-
-                if "resp" in when_req_then_resp:
-                    then_resp = when_req_then_resp["resp"]
-                    if got_resp != then_resp:
-                        msg_err = f"WHEN_REQ_CMD={when_req_cmd} WHEN_REQ_ARGS={when_req_args} THEN_RESP={then_resp} GOT_RESP={got_resp}"
-                        list_not_expected_resp.append(msg_err)
-
-        redis_client_call(redis_src_client, "save", ())
-        redis_client_call(redis_dst_client, "save", ())
-        redis_client_call(redis_src_expected_client, "save", ())
-        redis_client_call(redis_dst_expected_client, "save", ())
-
-        rdb_tools_container = run_container(
-            client=client,
-            name=f"rdb-tools-{e2e_id}-{tc_id}",
-            image=rdb_tools_image.id,
-            command=f"""
-            /bin/sh -c "
-            rdb --command diff /data/{REDIS_SRC_DUMP} | sort > /data/{REDIS_SRC_DUMP}.txt;
-            rdb --command diff /data/{REDIS_DST_DUMP} | sort > /data/{REDIS_DST_DUMP}.txt;
-            rdb --command diff /data/{REDIS_SRC_EXPECTED_DUMP} | sort > /data/{REDIS_SRC_EXPECTED_DUMP}.txt;
-            rdb --command diff /data/{REDIS_DST_EXPECTED_DUMP} | sort > /data/{REDIS_DST_EXPECTED_DUMP}.txt;
-            diff /data/{REDIS_SRC_DUMP}.txt /data/{REDIS_SRC_EXPECTED_DUMP}.txt && diff /data/{REDIS_DST_DUMP}.txt /data/{REDIS_DST_EXPECTED_DUMP}.txt;
-            echo $?
-            "
-            """,
-            network=e2e_test_network.name,
+        # === setup volume container: intermediary container to copy files (remiro config file, in this case) from host to volume ===
+        self.client.images.pull("hello-world:latest")
+        e2e_test_volume_container = self.client.containers.create(
+            name=f"e2e-test-volume-container-{e2e_id}-{tc_id}",
+            image="hello-world",
             volumes={e2e_test_volume.name: DEFAULT_BIND_VOLUME},
         )
+        # ===
+        self.e2e_test_network = e2e_test_network
+        self.e2e_test_volume = e2e_test_volume
+        self.e2e_test_volume_container = e2e_test_volume_container
 
-        rdb_tools_container_log = list(rdb_tools_container.logs(stream=True))
-        last_cmd_status = str(rdb_tools_container_log[-1], "utf-8").strip()
+    def cleanup_network_volume(self):
+        self.e2e_test_volume_container.stop()
+        self.e2e_test_volume_container.remove()
 
-        is_expected_cmd_status = last_cmd_status == "0"
-    except:
-        print(f"=== Exception when running a test: ===")
-        traceback.print_exc()
-        return False
+        self.e2e_test_network.remove()
+        self.e2e_test_volume.remove()
 
-    finally:
-        # === Delete containers, volume, network.
-        e2e_test_volume_container.stop()
-        e2e_test_volume_container.remove()
+    def run_redis_container(self, name, dbfilename, port):
+        return run_container(
+            client=self.client,
+            name=name,
+            image=REDIS_VERSION,
+            command=f"redis-server --dir {DEFAULT_BIND_PATH} --dbfilename {dbfilename}",
+            network=self.e2e_test_network.name,
+            volumes={self.e2e_test_volume.name: DEFAULT_BIND_VOLUME},
+            ports={"6379/tcp": port},
+        )
 
-        if rdb_tools_container != None:
-            rdb_tools_container.stop()
-            rdb_tools_container.remove()
+    def run_remiro_container(self, name, remiro_config_path, port):
+        print(f"{name} - {remiro_config_path} - {port}")
+        return run_container(
+            client=self.client,
+            name=name,
+            image=self.remiro_image.id,
+            command=f"-h 0.0.0.0 -p {port} -c {remiro_config_path}",
+            network=self.e2e_test_network.name,
+            volumes={self.e2e_test_volume.name: DEFAULT_BIND_VOLUME},
+            ports={"{}/tcp".format(port): port},
+        )
 
-        remiro_container.stop()
-        remiro_container.remove()
+    def run_rdb_tools_container(self, name, command):
+        return run_container(
+            client=self.client,
+            name=name,
+            image=self.rdb_tools_image.id,
+            command=command,
+            network=self.e2e_test_network.name,
+            volumes={self.e2e_test_volume.name: DEFAULT_BIND_VOLUME},
+        )
 
-        redis_src_container.stop()
-        redis_src_container.remove()
+    def create_remiro_config(self, redis_src_container, redis_dst_container):
+        tc_id = self.test_case["id"]
+        tc_test = self.test_case["test"]
+        # print("NETWORK:")
+        self.e2e_test_network.reload()
+        # pprint(e2e_test_network.attrs)
 
-        redis_dst_container.stop()
-        redis_dst_container.remove()
+        redis_src_ip = self.e2e_test_network.attrs["Containers"][
+            redis_src_container.id
+        ]["IPv4Address"][:-3]
+        redis_dst_ip = self.e2e_test_network.attrs["Containers"][
+            redis_dst_container.id
+        ]["IPv4Address"][:-3]
 
-        redis_src_expected_container.stop()
-        redis_src_expected_container.remove()
+        # === Copy Remiro Config File
+        given_config = copy.deepcopy(REMIRO_CONFIG_DEFAULT)
+        given_config.update(tc_test.get("given_config", {}))
 
-        redis_dst_expected_container.stop()
-        redis_dst_expected_container.remove()
+        remiro_config = REMIRO_CONFIG_TEMPLATE.format(
+            **given_config,
+            src_addr=f'"{redis_src_ip}:{6379}"',
+            dst_addr=f'"{redis_dst_ip}:{6379}"',
+        )
+        print(f"{tc_id} remiro_config:")
+        print(remiro_config)
+        return remiro_config
+
+    def copy_remiro_config_to_volume(self, remiro_config, bind_path):
+
+        temp_dir = tempfile.TemporaryDirectory()
+        remiro_config_file = open(os.path.join(temp_dir.name, "config.toml"), mode="w+")
+        try:
+            remiro_config_file.writelines(remiro_config)
+        finally:
+            remiro_config_file.close()
+        print("remiro_config_file: ", remiro_config_file.name)
+
+        status_put_archive = self.api_client.put_archive(
+            self.e2e_test_volume_container.name,
+            bind_path,
+            create_tar_file(remiro_config_file.name),
+        )
+        print(f"STATUS PUT_ARCHIVE: {status_put_archive}")
+
+    def run_test(self):
+        e2e_id = self.e2e_id
+        tc_id = self.test_case["id"]
+        tc_test = self.test_case["test"]
+        e2e_test_network = self.e2e_test_network
+
+        print("Creating containers ...")
+        redis_src_container = self.run_redis_container(
+            name=f"redis-src-{e2e_id}-{tc_id}",
+            dbfilename=REDIS_SRC_DUMP,
+            port=REDIS_SRC_PORT,
+        )
+        async_print_container_log(redis_src_container)
+
+        redis_dst_container = self.run_redis_container(
+            name=f"redis-dst-{e2e_id}-{tc_id}",
+            dbfilename=REDIS_DST_DUMP,
+            port=REDIS_DST_PORT,
+        )
+        async_print_container_log(redis_dst_container)
+
+        # === Redis Expected Containers ===
+        redis_src_expected_container = self.run_redis_container(
+            name=f"redis-src-expected-{e2e_id}-{tc_id}",
+            dbfilename=REDIS_SRC_EXPECTED_DUMP,
+            port=REDIS_SRC_EXPECTED_PORT,
+        )
+        async_print_container_log(redis_src_expected_container)
+
+        redis_dst_expected_container = self.run_redis_container(
+            name=f"redis-dst-expected-{e2e_id}-{tc_id}",
+            dbfilename=REDIS_DST_EXPECTED_DUMP,
+            port=REDIS_DST_EXPECTED_PORT,
+        )
+        async_print_container_log(redis_dst_expected_container)
+
+        remiro_config = self.create_remiro_config(
+            redis_src_container=redis_src_container,
+            redis_dst_container=redis_dst_container,
+        )
+        self.copy_remiro_config_to_volume(
+            remiro_config=remiro_config, bind_path=DEFAULT_BIND_PATH
+        )
+
         # ===
 
-        e2e_test_network.remove()
-        e2e_test_volume.remove()
+        remiro_config_path = f"{DEFAULT_BIND_PATH}/config.toml"
 
-    if list_not_expected_resp:
-        print("=== got_resp is not matched with then_resp ===")
-        for msg_err in list_not_expected_resp:
-            print(msg_err)
-
-    if not is_expected_cmd_status:
-        print(
-            "=== redis db comparison: (src vs src_expected) && (dst vs dst_expected) ==="
+        remiro_container = self.run_remiro_container(
+            name=f"remiro-{e2e_id}-{tc_id}",
+            remiro_config_path=remiro_config_path,
+            port=REMIRO_PORT,
         )
-        for log in rdb_tools_container_log:
-            print(log)
+        async_print_container_log(remiro_container)
 
-    return (is_expected_cmd_status) and (not list_not_expected_resp)
+        print("=== init redis clients ===")
+        remiro_client = redis.Redis(host="127.0.0.1", port=REMIRO_PORT)
+        redis_src_client = redis.Redis(host="127.0.0.1", port=REDIS_SRC_PORT)
+        redis_dst_client = redis.Redis(host="127.0.0.1", port=REDIS_DST_PORT)
+        redis_src_expected_client = redis.Redis(
+            host="127.0.0.1", port=REDIS_SRC_EXPECTED_PORT
+        )
+
+        redis_dst_expected_client = redis.Redis(
+            host="127.0.0.1", port=REDIS_DST_EXPECTED_PORT
+        )
+        # ===
+        print("=== populate given_data and then_data ===")
+        rdb_tools_container = None
+        rdb_tools_container_log = []
+        is_expected_cmd_status = False
+        try:
+
+            if "given_data" in tc_test:
+                given_data = tc_test["given_data"]
+                redis_client_call_inbulk(redis_src_client, given_data["src"])
+                redis_client_call_inbulk(redis_dst_client, given_data["dst"])
+
+            if "then_data" in tc_test:
+                then_data = tc_test["then_data"]
+                redis_client_call_inbulk(redis_src_expected_client, then_data["src"])
+                redis_client_call_inbulk(redis_dst_expected_client, then_data["dst"])
+            # ===
+
+            list_not_expected_resp = []
+            if "when_req_then_resp" in tc_test:
+                for when_req_then_resp in tc_test["when_req_then_resp"]:
+                    when_req_cmd, when_req_args = list(
+                        when_req_then_resp["req"].items()
+                    )[0]
+
+                    got_resp = None
+                    try:
+                        got_resp = redis_client_call(
+                            remiro_client, when_req_cmd, when_req_args
+                        )
+                    except (
+                        redis.exceptions.ResponseError,
+                        redis.exceptions.AuthenticationError,
+                    ) as ex:
+                        if "respError" in when_req_then_resp:
+                            if when_req_then_resp["respError"] != True:
+                                list_not_expected_resp.append(ex)
+                        else:
+                            list_not_expected_resp.append(
+                                f'{ex}. Hint: set "respError": True'
+                            )
+
+                    if "resp" in when_req_then_resp:
+                        then_resp = when_req_then_resp["resp"]
+                        if got_resp != then_resp:
+                            msg_err = f"WHEN_REQ_CMD={when_req_cmd} WHEN_REQ_ARGS={when_req_args} THEN_RESP={then_resp} GOT_RESP={got_resp}"
+                            list_not_expected_resp.append(msg_err)
+
+            redis_client_call(redis_src_client, "save", ())
+            redis_client_call(redis_dst_client, "save", ())
+            redis_client_call(redis_src_expected_client, "save", ())
+            redis_client_call(redis_dst_expected_client, "save", ())
+
+            rdb_tools_container = self.run_rdb_tools_container(
+                name=f"rdb-tools-{e2e_id}-{tc_id}",
+                command=f"""
+                /bin/sh -c "
+                rdb --command diff /data/{REDIS_SRC_DUMP} | sort > /data/{REDIS_SRC_DUMP}.txt;
+                rdb --command diff /data/{REDIS_DST_DUMP} | sort > /data/{REDIS_DST_DUMP}.txt;
+                rdb --command diff /data/{REDIS_SRC_EXPECTED_DUMP} | sort > /data/{REDIS_SRC_EXPECTED_DUMP}.txt;
+                rdb --command diff /data/{REDIS_DST_EXPECTED_DUMP} | sort > /data/{REDIS_DST_EXPECTED_DUMP}.txt;
+                diff /data/{REDIS_SRC_DUMP}.txt /data/{REDIS_SRC_EXPECTED_DUMP}.txt && diff /data/{REDIS_DST_DUMP}.txt /data/{REDIS_DST_EXPECTED_DUMP}.txt;
+                echo $?
+                "
+                """,
+            )
+
+            rdb_tools_container_log = list(rdb_tools_container.logs(stream=True))
+            last_cmd_status = str(rdb_tools_container_log[-1], "utf-8").strip()
+
+            is_expected_cmd_status = last_cmd_status == "0"
+        except:
+            print(f"=== Exception when running a test: ===")
+            traceback.print_exc()
+            return False
+
+        finally:
+            # === Delete containers, volume, network.
+
+            if rdb_tools_container != None:
+                rdb_tools_container.stop()
+                rdb_tools_container.remove()
+
+            remiro_container.stop()
+            remiro_container.remove()
+
+            redis_src_container.stop()
+            redis_src_container.remove()
+
+            redis_dst_container.stop()
+            redis_dst_container.remove()
+
+            redis_src_expected_container.stop()
+            redis_src_expected_container.remove()
+
+            redis_dst_expected_container.stop()
+            redis_dst_expected_container.remove()
+
+            self.cleanup_network_volume()
+            # ===
+
+        if list_not_expected_resp:
+            print("=== got_resp is not matched with then_resp ===")
+            for msg_err in list_not_expected_resp:
+                print(msg_err)
+
+        if not is_expected_cmd_status:
+            print(
+                "=== redis db comparison: (src vs src_expected) && (dst vs dst_expected) ==="
+            )
+            for log in rdb_tools_container_log:
+                print(log)
+
+        return (is_expected_cmd_status) and (not list_not_expected_resp)
 
 
 def main():
@@ -406,8 +459,7 @@ def main():
     # ==== Run a Test Case ===
 
     for tc in test_cases:
-
-        is_expected = run_test(
+        test_case = TestCase(
             client=client,
             api_client=api_client,
             remiro_image=remiro_image,
@@ -415,6 +467,8 @@ def main():
             e2e_id=e2e_id,
             test_case=tc,
         )
+
+        is_expected = test_case.run_test()
 
         if is_expected:
             print(f"Test PASSED: [{tc['id']}] {tc['name']}")
