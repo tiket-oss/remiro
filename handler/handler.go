@@ -101,7 +101,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 	}
 	defer stats.Record(reqCtx, reqLatencyMs.M(sinceInMs(startTime)))
 
-	log.Trace(logCmd(cmd.Args))
+	log.Tracef("Receiving command from %s: %v", conn.RemoteAddr(), logCmd(cmd.Args))
 
 	command := strings.ToUpper(string(cmd.Args[0]))
 	if !r.authorizedConn(conn, command) {
