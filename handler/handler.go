@@ -101,6 +101,8 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 	}
 	defer stats.Record(reqCtx, reqLatencyMs.M(sinceInMs(startTime)))
 
+	log.Trace(logCmd(cmd.Args))
+
 	command := strings.ToUpper(string(cmd.Args[0]))
 	if !r.authorizedConn(conn, command) {
 		conn.WriteError(errAuthMsg)
@@ -246,12 +248,12 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 }
 
 func (r *redisHandler) Accept(conn redcon.Conn) bool {
-	log.Infof("Accepting connection from %s", conn.RemoteAddr())
+	log.Tracef("Accepting connection from %s", conn.RemoteAddr())
 	return true
 }
 
 func (r *redisHandler) Closed(conn redcon.Conn, err error) {
-	log.Infof("Connection from %s has been closed", conn.RemoteAddr())
+	log.Tracef("Connection from %s has been closed", conn.RemoteAddr())
 
 	r.Lock()
 	r.authenticatedAddr[conn.RemoteAddr()] = false
@@ -419,4 +421,12 @@ func isRawReply(reply []byte) bool {
 	}
 
 	return false
+}
+
+func logCmd(cmdArgs [][]byte) []string {
+	cmd := make([]string, len(cmdArgs))
+	for i, arg := range cmdArgs {
+		cmd[i] = string(arg)
+	}
+	return cmd
 }
