@@ -10,16 +10,26 @@ import (
 	"github.com/tiket-libre/remiro/handler"
 )
 
+func setLogLevel(logLevel string) {
+	level, err := log.ParseLevel(logLevel)
+	if err != nil {
+		level = log.WarnLevel
+	}
+	log.SetLevel(level)
+}
+
 func main() {
-	var host, port, instruPort, configPath string
+	var host, port, instruPort, configPath, logLevel string
 
 	flag.StringVarP(&host, "host", "h", "127.0.0.1", "server host address")
 	flag.StringVarP(&port, "port", "p", "6379", "port the server will listen to")
 	flag.StringVarP(&instruPort, "instru-port", "i", "8888", "configure the port for providing instrumentation")
 	flag.StringVarP(&configPath, "config", "c", "config.toml", "configuration file to use")
+	flag.StringVarP(&logLevel, "log-level", "l", "warn", "Set the logging level (trace, debug, info, warn, error, fatal, panic)")
 
 	flag.Parse()
 
+	setLogLevel(logLevel)
 	config, _ := readConfig(configPath)
 	addr := fmt.Sprintf("%s:%s", host, port)
 	redisHandler := handler.NewRedisHandler(config)
