@@ -97,7 +97,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 	startTime := time.Now()
 	reqCtx, err := tag.New(context.Background())
 	if err != nil {
-		log.Warnf("Failed to initialize instrumentation: %v", err)
+		log.WithField("context", "Error when recording command").Warn(err)
 	}
 	defer stats.Record(reqCtx, reqLatencyMs.M(sinceInMs(startTime)))
 
@@ -127,7 +127,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		}
 
 		if err != redis.ErrNil {
-			conn.WriteError(err.Error())
+			logAndReplyError(conn, cmd, err)
 			break
 		}
 
@@ -140,7 +140,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 			if err == redis.ErrNil {
 				conn.WriteNull()
 			} else {
-				conn.WriteError(err.Error())
+				logAndReplyError(conn, cmd, err)
 			}
 			break
 		}
@@ -151,12 +151,18 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		_, err = redis.String(dstConn.Do("SET", key, val))
 		go recordRedisCmd("destination", "SET")
 		if err != nil {
-			log.Error(fmt.Errorf("Error when setting key %s: %v", key, err))
+			log.WithFields(log.Fields{
+				"context": "SET key to destination from source",
+				"key":     string(key),
+			}).Error(err)
 		}
 
 		if r.deleteOnGet && err == nil {
 			if err := deleteKey(srcConn, key); err != nil {
-				log.Warn(err)
+				log.WithFields(log.Fields{
+					"context": "Delete on GET",
+					"key":     string(key),
+				}).Warn(err)
 			}
 			go recordRedisCmd("source", "DEL")
 		}
@@ -175,7 +181,11 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		reply, err := redis.String(dstConn.Do(command, args...))
 		go recordRedisCmd("destination", "SET")
 		if err != nil {
-			conn.WriteError(err.Error())
+			if _, ok := err.(redis.Error); !ok {
+				logAndReplyError(conn, cmd, err)
+			} else {
+				conn.WriteError(err.Error())
+			}
 			break
 		}
 
@@ -184,7 +194,10 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 			defer srcConn.Close()
 
 			if err := deleteKey(srcConn, key); err != nil {
-				log.Warn(err)
+				log.WithFields(log.Fields{
+					"context": "Delete on SET",
+					"key":     string(key),
+				}).Error(err)
 			} else {
 				r.Lock()
 				r.deletedKey[string(key)] = true
@@ -239,7 +252,7 @@ func (r *redisHandler) Handle(conn redcon.Conn, cmd redcon.Command) {
 		go recordRedisCmd("destination", command)
 		if err != nil {
 			if _, ok := err.(redis.Error); !ok {
-				log.Error(fmt.Errorf("Error when executing command %s: %v", command, err))
+				logAndReplyError(conn, cmd, err)
 			}
 		}
 
@@ -369,7 +382,7 @@ func newRedisPool(config ClientConfig) *redis.Pool {
 func deleteKey(conn redis.Conn, key []byte) error {
 	_, err := redis.Int(conn.Do("DEL", key))
 	if err != nil && err != redis.ErrNil {
-		return fmt.Errorf("Error when deleting key %s: %v", key, err)
+		return err
 	}
 
 	return nil
@@ -429,4 +442,11 @@ func logCmd(cmdArgs [][]byte) []string {
 		cmd[i] = string(arg)
 	}
 	return cmd
+}
+
+func logAndReplyError(conn redcon.Conn, cmd redcon.Command, err error) {
+	conn.WriteError("Unexpected server error")
+	log.WithFields(log.Fields{
+		"command": logCmd(cmd.Args),
+	}).Error(err)
 }
