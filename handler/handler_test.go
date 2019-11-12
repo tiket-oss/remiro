@@ -61,7 +61,7 @@ func Test_redisHandler_HandleGET(t *testing.T) {
 
 	var (
 		key, value = "mykey", "hello"
-		errorMsg   = "Unexpected error"
+		errorMsg   = "Unexpected server error"
 		rawMessage = fmt.Sprintf("*2\r\n$3\r\nGET\r\n$%d\r\n%s\r\n", len(key), key)
 		rawValue   = fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)
 		rawNil     = "$-1\r\n"
@@ -351,7 +351,7 @@ func Test_redisHandler_HandleSET(t *testing.T) {
 
 	var (
 		key, value = "mykey", "hello"
-		errorMsg   = "Unexpected error"
+		errorMsg   = "Unexpected server error"
 		rawMessage = fmt.Sprintf("*3\r\n$3\r\nSET\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(key), key, len(value), value)
 		rawOK      = "+OK\r\n"
 		rawError   = fmt.Sprintf("-%s\r\n", errorMsg)
