@@ -1,4 +1,4 @@
-module github.com/tiket-libre/remiro
+module github.com/tiket-oss/remiro
 
 go 1.12
 

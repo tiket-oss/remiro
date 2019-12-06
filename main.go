@@ -7,7 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
 
-	"github.com/tiket-libre/remiro/handler"
+	"github.com/tiket-oss/remiro/handler"
 )
 
 func main() {
